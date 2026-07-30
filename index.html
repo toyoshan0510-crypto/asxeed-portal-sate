@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASXEED 社内研修ポータル</title>
+<style>
+  html,body,#root{height:100%;margin:0}
+  body{background:#f4f1ea}
+  #boot{display:flex;height:100%;align-items:center;justify-content:center;
+        font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo",sans-serif;color:#7a7263;font-size:14px}
+</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js" crossorigin></script>
+</head>
+<body>
+<div id="root"><div id="boot">読み込み中…</div></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect, useCallback } = React;
+
+
+
+/* ============================================================
+   ASXEED 研修ポータル ｜ 本番版
+   中身はすべてスプレッドシートから読み込みます。
+   このファイルに教材は入っていません（公開されても中身は漏れません）。
+
+   ▼ ここに、GASをデプロイして出てきたURLを貼ってください
+   ============================================================ */
+const GAS_URL = "https://script.google.com/macros/s/AKfycbw1p84q5HK9y1LY8FMAZSkwzRl4mGruuGZnh6PICPUAuoF43kztGCRr_vYJLZSCWn2W/exec";
+
+/* -------------------------------------------------- */
+
+const C = {
+  ink: "#15172b", paper: "#f4f1ea", shu: "#c2402e", green: "#2f7d5b",
+  gold: "#b8893a", text: "#23201c", sub: "#7a7263", line: "#e3ddcf",
+};
+const sans = "'Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo','Noto Sans JP',sans-serif";
+const mincho = "'Hiragino Mincho ProN','Yu Mincho','Noto Serif JP',serif";
+const COLOR = { 朱: C.shu, 緑: C.green, 金: C.gold, 紺: C.ink };
+const BAND = { 数字面: C.green, 行動面: C.gold, 人間性: "#3560a8" };
+const RANK = { 新人: 0, 課員: 1, 主任: 2, 課長: 3, 次長: 4, 部長: 5 };
+const canConsult = (r) => (RANK[r] || 0) >= 2;
+const isBoss = (r) => (RANK[r] || 0) >= 3;
+
+function useIsMobile() {
+  const [m, setM] = useState(typeof window !== "undefined" && window.innerWidth < 760);
+  useEffect(() => {
+    const f = () => setM(window.innerWidth < 760);
+    f(); window.addEventListener("resize", f);
+    return () => window.removeEventListener("resize", f);
+  }, []);
+  return m;
+}
+
+/* ---------- 通信 ---------- */
+async function api(action, payload) {
+  if (!GAS_URL) return { ok: false, error: "GAS_URL が未設定です（サンプル表示中）" };
+  const res = await fetch(GAS_URL, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain;charset=utf-8" }, // プリフライトを避けるため text/plain
+    body: JSON.stringify(Object.assign({ action }, payload)),
+  });
+  return res.json();
+}
+
+/* ---------- 画面確認用のサンプル（GAS_URL未設定のときだけ使う） ---------- */
+const SAMPLE = {
+  me: { id: "E001", name: "サンプル", rank: "課員" },
+  courses: [{
+    id: "staff", badge: "課員", title: "人員と数字の型", goal: "②主任昇格基準の10項目を取りにいく",
+    subtitle: "シートの見方と記入、タスクの組み方、人員面談までを一人でできるようにする", color: "緑", minRank: 1,
+    steps: [{
+      code: "G1", title: "シートの見方", needApproval: true, blocks: [
+        { id: "staff-G1-1", type: "動画", title: "社員個別実績表の見方", video: "", min: 12, desc: "", questions: [], cards: [] },
+        {
+          id: "staff-G1-3", type: "確認テスト", title: "確認テスト（シートの見方）", pass: 1, desc: "", cards: [],
+          questions: [{ q: "経費は何から引かれる？", options: ["会社の共通費から", "自分の粗利益から"], correct: 1 }],
+        },
+      ],
+    }, { code: "G2", title: "シートの記入", needApproval: true, blocks: [] }],
+  }],
+  roadmap: {
+    goal: "課員 → 主任", axis: "自立度・業務完遂", span: "4ヶ月〜12ヶ月",
+    items: [{ n: 1, band: "数字面", t: "月次指標評価がB(71点)以上だった月数", line: "3ヶ月連続", src: "月次指標サマリー", done: true },
+    { n: 2, band: "行動面", t: "タスク管理が自律的", line: "満たす＝1", src: "上長確認", done: false }],
+  },
+  manual: [{ rank: "共通", order: 1, h: "判断の4原則", li: ["自分の裁量で優先順位を変えない", "数字で評価される"] }],
+  qa: [{ cat: "現場応対", q: "上長への報告の順番は？", a: "結論 → 数値・事実 → 背景 の順です。" }],
+  progress: {},
+};
+
+/* ============================================================ */
+function App() {
+  const [token, setToken] = useState(null);
+  const [d, setD] = useState(null);
+  const [demo, setDemo] = useState(false);
+  const [section, setSection] = useState("home");
+  const [view, setView] = useState("dash");
+  const [course, setCourse] = useState(null);
+  const [step, setStep] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const mobile = useIsMobile();
+
+  const reload = useCallback(async (tk) => {
+    const r = await api("bootstrap", { token: tk });
+    if (r.ok) setD(r);
+    return r;
+  }, []);
+
+  const onLogin = async (tk, sample) => {
+    if (sample) { setDemo(true); setD(SAMPLE); setToken("sample"); return; }
+    setToken(tk); setBusy(true);
+    await reload(tk); setBusy(false);
+  };
+
+  const save = async (blockId, status, score) => {
+    if (demo || !token) return;
+    await api("saveProgress", { token, blockId, status, score });
+    reload(token);
+  };
+
+  if (!token || !d) return <Login onLogin={onLogin} busy={busy} />;
+
+  const me = d.me;
+  return (
+    <div style={{ background: C.paper, minHeight: "100%", color: C.text, fontFamily: sans }}>
+      {demo && (
+        <div style={{ background: C.gold, color: "#fff", fontSize: 12, padding: "7px 16px", textAlign: "center" }}>
+          サンプル表示中です。ファイル冒頭の <b>GAS_URL</b> にデプロイURLを貼ると、スプレッドシートの中身が出ます。
+        </div>
+      )}
+      <TopBar me={me} onOut={() => { setToken(null); setD(null); setDemo(false); setSection("home"); }} />
+      <div style={{ display: "flex", flexDirection: mobile ? "column" : "row", maxWidth: 1180, margin: "0 auto" }}>
+        <Sidebar section={section} role={me.rank} mobile={mobile} setSection={(s) => { setSection(s); setView("dash"); }} />
+        <main style={{ flex: 1, padding: mobile ? "16px 14px 56px" : "26px 26px 60px", minWidth: 0 }}>
+          {section === "home" && view === "dash" &&
+            <Dashboard d={d} onOpen={(c) => { setCourse(c); setView("course"); }} onReport={() => setSection("report")} />}
+          {section === "home" && view === "course" &&
+            <CourseView course={course} progress={d.progress} onBack={() => setView("dash")} onStep={(s) => { setStep(s); setView("lesson"); }} />}
+          {section === "home" && view === "lesson" &&
+            <Lesson course={course} step={step} progress={d.progress} token={token} demo={demo} save={save} onBack={() => setView("course")} />}
+          {section === "qa" && <QAView qa={d.qa} />}
+          {section === "consult" && <ConsultView role={me.rank} token={token} demo={demo} />}
+          {section === "manual" && <ManualView manual={d.manual} role={me.rank} />}
+          {section === "report" && <ReportView roadmap={d.roadmap} />}
+          {section === "team" && <TeamView token={token} demo={demo} />}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- ログイン ---------- */
+function Login({ onLogin, busy }) {
+  const [name, setName] = useState("");
+  const [rank, setRank] = useState("課員");
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [wait, setWait] = useState(false);
+  const mobile = useIsMobile();
+
+  const go = async () => {
+    setErr("");
+    if (!GAS_URL) { onLogin(null, true); return; }
+    if (!name.trim()) return setErr("社員名を入力してください。");
+    setWait(true);
+    try {
+      const r = await api("login", { name: name.trim(), rank, password: pw });
+      if (!r.ok) { setErr(r.error || "ログインできませんでした。"); setWait(false); return; }
+      onLogin(r.token, false);
+    } catch (e) {
+      setErr("接続できませんでした。GAS_URL とデプロイ設定を確認してください。"); setWait(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: "100%", display: "flex", flexDirection: mobile ? "column" : "row", fontFamily: sans }}>
+      <div style={mobile
+        ? { background: `linear-gradient(160deg,${C.ink},#2a2e52)`, color: C.paper, padding: "26px 22px", textAlign: "center" }
+        : { flex: "0 0 38%", background: `linear-gradient(160deg,${C.ink},#2a2e52)`, color: C.paper, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", padding: 30 }}>
+        <div style={{ fontFamily: mincho, fontSize: mobile ? 11 : 13, letterSpacing: 6, opacity: 0.7 }}>THE ASXEED WAY</div>
+        <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: mobile ? 24 : 34, lineHeight: 1.4, textAlign: "center", marginTop: mobile ? 8 : 16 }}>“勝ち方”を、<br />全員の型に。</div>
+        {!mobile && <div style={{ fontSize: 11, opacity: 0.6, marginTop: 22, letterSpacing: 1 }}>OPERATING MANUAL SYSTEM ｜ INTERNAL</div>}
+      </div>
+      <div style={{ flex: 1, background: C.paper, display: "flex", flexDirection: "column", justifyContent: "center", padding: mobile ? "26px 22px 40px" : "0 9%" }}>
+        <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 24, color: C.ink }}>社内研修ポータル</div>
+        <div style={{ fontSize: 13, color: C.sub, marginTop: 6, marginBottom: 26 }}>社員名・役職・パスワードでログイン</div>
+        <Field label="社員名"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="氏名を入力" style={inp} /></Field>
+        <Field label="役職">
+          <select value={rank} onChange={(e) => setRank(e.target.value)} style={inp}>
+            {["新人", "課員", "主任", "課長", "次長"].map((r) => <option key={r}>{r}</option>)}
+          </select>
+        </Field>
+        <Field label="パスワード">
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && go()} style={inp} />
+        </Field>
+        <button onClick={go} disabled={wait || busy} style={{ marginTop: 14, padding: "13px 0", border: "none", borderRadius: 9, background: C.shu, color: "#fff", fontWeight: 700, fontSize: 15, letterSpacing: 2, cursor: "pointer", fontFamily: sans, opacity: wait ? 0.6 : 1 }}>
+          {wait ? "確認中…" : GAS_URL ? "ログイン" : "サンプルを見る"}
+        </button>
+        {err && <div style={{ color: C.shu, fontSize: 12.5, marginTop: 10, fontWeight: 700, lineHeight: 1.7 }}>{err}</div>}
+        <div style={{ fontSize: 11.5, color: C.sub, marginTop: 16, lineHeight: 1.7 }}>
+          {GAS_URL
+            ? "パスワードはサーバー側で照合しています。この画面のコードには保存されていません。"
+            : "GAS_URL が未設定のため、サンプル表示になります。"}
+        </div>
+      </div>
+    </div>
+  );
+}
+const inp = { width: "100%", padding: "11px 13px", borderRadius: 8, border: `1px solid ${C.line}`, background: "#fff", fontSize: 14, fontFamily: sans, boxSizing: "border-box", color: C.text };
+function Field({ label, children }) {
+  return <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 5 }}>{label}</div>{children}</div>;
+}
+
+/* ---------- 共通 ---------- */
+function TopBar({ me, onOut }) {
+  return (
+    <div style={{ background: C.ink, color: C.paper, padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontFamily: mincho, fontWeight: 900, fontSize: 20, letterSpacing: 2 }}>ASXEED</span>
+        <span style={{ fontSize: 11, letterSpacing: 3, opacity: 0.55 }}>LEARNING</span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 12.5 }}>
+        <span style={{ opacity: 0.8 }}>{me.name} さん（{me.rank}）</span>
+        <button onClick={onOut} style={{ background: "none", border: "none", color: "#a9b6c6", fontSize: 12, cursor: "pointer", fontFamily: sans }}>出る</button>
+        <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.shu, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>{String(me.name).slice(0, 1)}</div>
+      </div>
+    </div>
+  );
+}
+function Sidebar({ section, role, mobile, setSection }) {
+  const nav = [
+    { id: "home", label: "ホーム", icon: "⌂" },
+    { id: "manual", label: "業務マニュアル", icon: "▤" },
+    { id: "qa", label: "Q&A", icon: "?" },
+    { id: "consult", label: "AI相談", icon: "✦" },
+    { id: "report", label: "学習レポート", icon: "◔" },
+  ];
+  if (isBoss(role)) nav.push({ id: "team", label: "承認", icon: "✔" });
+  return (
+    <aside style={mobile
+      ? { display: "flex", gap: 6, padding: "10px 12px", borderBottom: `1px solid ${C.line}`, overflowX: "auto", WebkitOverflowScrolling: "touch" }
+      : { flex: "0 0 192px", padding: "24px 14px", borderRight: `1px solid ${C.line}` }}>
+      {nav.map((n) => {
+        const on = n.id === section;
+        const locked = n.id === "consult" && !canConsult(role);
+        return (
+          <button key={n.id} onClick={() => setSection(n.id)} style={{
+            display: "flex", alignItems: "center", gap: mobile ? 5 : 10,
+            width: mobile ? "auto" : "100%", flexShrink: 0, whiteSpace: "nowrap", textAlign: "left",
+            padding: mobile ? "8px 12px" : "11px 13px", marginBottom: mobile ? 0 : 4,
+            borderRadius: mobile ? 99 : 9, cursor: "pointer", fontFamily: sans,
+            border: mobile && !on ? `1px solid ${C.line}` : "none", fontSize: mobile ? 13 : 14, fontWeight: on ? 700 : 500,
+            background: on ? (mobile ? C.ink : "#fff") : "transparent", color: on ? (mobile ? C.paper : C.shu) : C.text,
+            boxShadow: on && !mobile ? "0 1px 6px rgba(0,0,0,.05)" : "none",
+          }}>
+            <span style={{ width: mobile ? "auto" : 18, textAlign: "center", opacity: 0.7 }}>{n.icon}</span>
+            <span style={mobile ? {} : { flex: 1 }}>{n.label}</span>
+            {locked && <span style={{ fontSize: 12, opacity: 0.6 }}>🔒</span>}
+          </button>
+        );
+      })}
+    </aside>
+  );
+}
+function H({ title }) {
+  return <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 22, color: C.ink, marginBottom: 18 }}>{title}</div>;
+}
+function Bar({ v, bg, fg }) {
+  return <div style={{ height: 8, borderRadius: 99, background: bg, overflow: "hidden" }}><div style={{ width: `${v}%`, height: "100%", background: fg, borderRadius: 99, transition: "width .4s" }} /></div>;
+}
+const card = { background: "#fff", border: `1px solid ${C.line}`, borderRadius: 14 };
+const backBtn = { background: "transparent", border: `1px solid ${C.line}`, borderRadius: 8, padding: "7px 14px", fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 16, fontFamily: sans };
+
+/* ---------- 進捗の判定 ---------- */
+const secKey = (c, s) => `${c.id}-${s.code}-SEC`;
+const blockDone = (p, id) => { const x = p[id]; return !!x && (x.status === "完了" || x.status === "承認済"); };
+const sectionDone = (p, c, s) => {
+  if (!s.blocks.length) return false;
+  const all = s.blocks.every((b) => blockDone(p, b.id));
+  if (!s.needApproval) return all;
+  return (p[secKey(c, s)] || {}).status === "承認済";
+};
+function decorate(course, progress) {
+  let foundCurrent = false;
+  const steps = course.steps.map((s) => {
+    const done = sectionDone(progress, course, s);
+    const current = !done && !foundCurrent;
+    if (current) foundCurrent = true;
+    return Object.assign({}, s, { done, current });
+  });
+  const pr = steps.length ? Math.round((steps.filter((s) => s.done).length / steps.length) * 100) : 0;
+  return { steps, progress: pr, current: steps.find((s) => s.current) || steps[0] };
+}
+
+/* ---------- ダッシュボード ---------- */
+function Dashboard({ d, onOpen, onReport }) {
+  const rm = d.roadmap || { items: [] };
+  const got = (rm.items || []).filter((i) => i.done).length;
+  const mine = d.courses.find((c) => c.badge === d.me.rank) || d.courses[d.courses.length - 1];
+  const dec = mine ? decorate(mine, d.progress) : null;
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "stretch", marginBottom: 28 }}>
+        <button onClick={onReport} style={{ ...card, padding: "22px 26px", textAlign: "center", minWidth: 150, cursor: "pointer", fontFamily: sans }}>
+          <div style={{ fontSize: 12, color: C.sub, fontWeight: 700 }}>昇格まで</div>
+          <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 44, color: C.ink, lineHeight: 1.1 }}>{got}<span style={{ fontSize: 22, color: C.sub }}>/{(rm.items || []).length || 10}</span></div>
+          <div style={{ fontSize: 12, color: C.shu, fontWeight: 700 }}>{rm.goal || "基準を設定してください"}</div>
+        </button>
+        {dec && (
+          <div style={{ flex: 1, minWidth: 260, background: `linear-gradient(135deg,${C.ink},#33375f)`, borderRadius: 14, padding: 20, color: C.paper }}>
+            <div style={{ fontSize: 12, fontWeight: 700, opacity: 0.8 }}>実行中のアクション</div>
+            <div style={{ fontWeight: 700, fontSize: 16, margin: "8px 0 12px" }}>【{dec.current.code}】{dec.current.title}</div>
+            <Bar v={dec.progress} bg="rgba(255,255,255,.25)" fg={C.shu} />
+            <div style={{ fontSize: 12, opacity: 0.75, marginTop: 12 }}>{mine.title} ／ 進捗 {dec.progress}%</div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 18, color: C.ink, marginBottom: 14 }}>あなたの昇格ルート</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 16 }}>
+        {d.courses.map((c) => {
+          const accent = COLOR[c.color] || C.ink;
+          const dd = decorate(c, d.progress);
+          return (
+            <div key={c.id} style={{ ...card, overflow: "hidden" }}>
+              <div style={{ height: 76, background: accent, display: "flex", alignItems: "center", padding: "0 18px", color: "#fff" }}>
+                <span style={{ fontFamily: mincho, fontWeight: 900, fontSize: 17 }}>{c.badge}</span>
+              </div>
+              <div style={{ padding: 16 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.5 }}>{c.title}</div>
+                <div style={{ fontSize: 12, color: C.sub, margin: "6px 0 12px", lineHeight: 1.6 }}>{c.subtitle}</div>
+                <div style={{ fontSize: 11, color: C.sub, marginBottom: 4 }}>進捗率 {dd.progress}% ／ {c.steps.length}セクション</div>
+                <Bar v={dd.progress} bg={C.line} fg={accent} />
+                <button onClick={() => onOpen(c)} style={{ marginTop: 14, width: "100%", padding: "10px 0", border: "none", borderRadius: 8, background: accent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: sans }}>進める</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {!d.courses.length && <div style={{ ...card, padding: 36, textAlign: "center", color: C.sub, fontSize: 13.5 }}>表示できるコースがありません。スプレッドシートの①コースで「公開」と「最低役職」を確認してください。</div>}
+    </div>
+  );
+}
+
+/* ---------- コース ---------- */
+function CourseView({ course, progress, onBack, onStep }) {
+  const accent = COLOR[course.color] || C.ink;
+  const dec = decorate(course, progress);
+  return (
+    <div>
+      <button onClick={onBack} style={backBtn}>← ホームに戻る</button>
+      <H title={course.title} />
+      {course.goal && <div style={{ fontSize: 12.5, color: C.sub, marginTop: -10, marginBottom: 16 }}>目標：{course.goal}</div>}
+      <div style={{ ...card, padding: 22 }}>
+        {dec.steps.map((s, i) => (
+          <button key={s.code} onClick={() => onStep(s)} style={{
+            display: "flex", alignItems: "center", gap: 14, width: "100%", textAlign: "left",
+            padding: "13px 14px", marginBottom: 6, borderRadius: 10, cursor: "pointer", fontFamily: sans,
+            border: s.current ? `2px solid ${accent}` : `1px solid ${C.line}`,
+            background: s.current ? "#fff8f4" : "transparent",
+          }}>
+            <span style={{
+              width: 26, height: 26, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+              background: s.done ? C.green : s.current ? accent : C.line, color: s.done || s.current ? "#fff" : C.sub, fontSize: 13, fontWeight: 700,
+            }}>{s.done ? "✓" : s.current ? "▶" : i + 1}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.sub, width: 28 }}>{s.code}</span>
+            <span style={{ flex: 1, fontSize: 14.5, fontWeight: s.current ? 700 : 500, textDecoration: s.done ? "line-through" : "none", color: s.done ? C.sub : C.text }}>{s.title}</span>
+            <span style={{ fontSize: 11, color: C.sub, whiteSpace: "nowrap" }}>{s.blocks.length}ブロック</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- レッスン ---------- */
+const sBtn = { padding: "9px 14px", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: sans };
+const sBtnOutline = { padding: "9px 14px", border: `1px solid ${C.sub}`, borderRadius: 8, background: "transparent", color: C.sub, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: sans };
+
+function Lesson({ course, step, progress, token, demo, save, onBack }) {
+  const accent = COLOR[course.color] || C.ink;
+  const mobile = useIsMobile();
+  const [local, setLocal] = useState({});
+  const isDone = (b) => blockDone(progress, b.id) || !!local[b.id];
+  const mark = (b, score) => { setLocal((x) => Object.assign({}, x, { [b.id]: true })); save(b.id, "完了", score); };
+  const secStatus = (progress[secKey(course, step)] || {}).status || "";
+
+  if (!step.blocks.length) {
+    return (
+      <div>
+        <button onClick={onBack} style={backBtn}>← アクション一覧に戻る</button>
+        <div style={{ background: accent, color: "#fff", borderRadius: "12px 12px 0 0", padding: "13px 18px", fontWeight: 700 }}>【{step.code}】{step.title}</div>
+        <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: 36, textAlign: "center", color: C.sub, fontSize: 13.5, lineHeight: 1.9 }}>
+          このセクションにはまだブロックがありません。<br />スプレッドシートの ③ブロック に、<b>{course.id}-{step.code}-1</b> から行を足してください。
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button onClick={onBack} style={backBtn}>← アクション一覧に戻る</button>
+      <div style={{ display: "flex", gap: mobile ? 14 : 18, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ flex: mobile ? "1 1 100%" : "1 1 380px", minWidth: mobile ? 0 : 300 }}>
+          <div style={{ background: accent, color: "#fff", borderRadius: "12px 12px 0 0", padding: "13px 18px", fontWeight: 700 }}>【{step.code}】{step.title}</div>
+          <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderTop: "none", borderRadius: "0 0 12px 12px", padding: 18 }}>
+            {step.blocks.map((b) => <Block key={b.id} b={b} done={isDone(b)} onDone={(sc) => mark(b, sc)} />)}
+            <SectionGate blocks={step.blocks} isDone={isDone} status={secStatus} accent={accent}
+              needApproval={step.needApproval}
+              onRequest={() => save(secKey(course, step), "申請中")} onBack={onBack} demo={demo} />
+          </div>
+        </div>
+        <AIPanel step={step} mobile={mobile} token={token} demo={demo} />
+      </div>
+    </div>
+  );
+}
+
+function Block({ b, done, onDone }) {
+  if (b.type === "動画") return <VideoBlock b={b} done={done} onDone={onDone} />;
+  if (b.type === "確認テスト") return <QuizBlock b={b} done={done} onDone={onDone} />;
+  if (b.type === "ロープレ") return <RoleplayBlock b={b} done={done} onDone={onDone} />;
+  if (b.type === "場合分け") return <ScenarioBlock b={b} done={done} onDone={onDone} />;
+  return null;
+}
+
+function BlockShell({ tag, tagColor, title, done, children }) {
+  return (
+    <div style={{ border: `1px solid ${done ? C.green : C.line}`, borderRadius: 10, padding: 14, marginBottom: 14, background: done ? "#f3f9f5" : "#fff" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: tagColor, padding: "3px 9px", borderRadius: 99, whiteSpace: "nowrap" }}>{tag}</span>
+        <span style={{ fontWeight: 700, fontSize: 14 }}>{title}</span>
+        {done && <span style={{ marginLeft: "auto", color: C.green, fontWeight: 700, fontSize: 13, whiteSpace: "nowrap" }}>✓ 完了</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ytId(url) {
+  const m = String(url).match(/(?:v=|youtu\.be\/|embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+function VideoBlock({ b, done, onDone }) {
+  const id = ytId(b.video);
+  return (
+    <BlockShell tag="動画" tagColor={C.shu} title={b.title} done={done}>
+      {id ? (
+        <div style={{ aspectRatio: "16/9", marginBottom: 12 }}>
+          <iframe src={`https://www.youtube.com/embed/${id}`} title={b.title} allowFullScreen
+            style={{ width: "100%", height: "100%", border: 0, borderRadius: 10 }} />
+        </div>
+      ) : (
+        <div style={{ aspectRatio: "16/9", background: "#101018", borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", marginBottom: 12, gap: 8 }}>
+          <div style={{ color: "#8a8a9a", fontSize: 13 }}>準備中</div>
+          <div style={{ color: "#5c5c6b", fontSize: 11 }}>③ブロックの「動画URL」を入れると再生されます{b.min ? `（${b.min}分の予定）` : ""}</div>
+        </div>
+      )}
+      {!done && <button onClick={() => onDone()} style={sBtn}>視聴済みにする</button>}
+    </BlockShell>
+  );
+}
+
+function QuizBlock({ b, done, onDone }) {
+  const [ans, setAns] = useState({});
+  const [score, setScore] = useState(null);
+  const qs = b.questions || [];
+  const pass = b.pass || qs.length;
+  const answered = Object.keys(ans).length >= qs.length;
+  const grade = () => {
+    let s = 0; qs.forEach((q, i) => { if (ans[i] === q.correct) s++; });
+    setScore(s); if (s >= pass) onDone(s);
+  };
+  const passed = score !== null && score >= pass;
+  if (!qs.length) return (
+    <BlockShell tag="確認テスト" tagColor="#d97a2b" title={b.title} done={done}>
+      <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.8 }}>設問がまだありません。④テスト設問に、ブロックID <b>{b.id}</b> で行を足してください。</div>
+    </BlockShell>
+  );
+  return (
+    <BlockShell tag="確認テスト" tagColor="#d97a2b" title={b.title} done={done}>
+      {qs.map((q, qi) => (
+        <div key={qi} style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>Q{qi + 1}. {q.q}</div>
+          {q.options.map((o, oi) => {
+            const sel = ans[qi] === oi, reveal = score !== null;
+            const right = reveal && oi === q.correct, wrong = reveal && sel && oi !== q.correct;
+            return (
+              <button key={oi} onClick={() => { if (score === null) setAns((a) => Object.assign({}, a, { [qi]: oi })); }} style={{
+                display: "block", width: "100%", textAlign: "left", padding: "8px 12px", marginBottom: 5, borderRadius: 7,
+                cursor: score === null ? "pointer" : "default", fontFamily: sans, fontSize: 13.5,
+                border: right ? `2px solid ${C.green}` : wrong ? `2px solid ${C.shu}` : sel ? `2px solid ${C.shu}` : `1px solid ${C.line}`,
+                background: right ? "#f3f9f5" : wrong ? "#fdf3f1" : sel ? "#fff8f4" : "#fff", color: C.text,
+              }}>{o}{right && <span style={{ color: C.green, fontWeight: 700 }}> ✓</span>}</button>
+            );
+          })}
+        </div>
+      ))}
+      {score === null
+        ? <button onClick={grade} disabled={!answered} style={{ ...sBtn, background: answered ? C.green : C.line, cursor: answered ? "pointer" : "default" }}>採点する</button>
+        : <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: passed ? C.green : C.shu, marginBottom: 8 }}>{score}/{qs.length} 正解 — {passed ? "合格" : `不合格（${pass}問以上で合格）`}</div>
+          {!passed && <button onClick={() => { setScore(null); setAns({}); }} style={sBtnOutline}>再挑戦する</button>}
+        </div>}
+    </BlockShell>
+  );
+}
+
+function RoleplayBlock({ b, done, onDone }) {
+  return (
+    <BlockShell tag="ロープレ" tagColor="#6b4ea3" title={b.title} done={done}>
+      <div style={{ fontSize: 13.5, lineHeight: 1.8, marginBottom: 8 }}>{b.desc}</div>
+      <div style={{ fontSize: 11.5, color: C.sub, marginBottom: 10, lineHeight: 1.6 }}>※ 合否は上長が判定します。本人申告では完了になりません。</div>
+      {!done
+        ? <button onClick={() => onDone()} style={sBtnOutline}>実演した（上長の判定を待つ）</button>
+        : <span style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>実演済み</span>}
+    </BlockShell>
+  );
+}
+
+function ScenarioBlock({ b, done, onDone }) {
+  return (
+    <BlockShell tag="場合分け訓練ロープレ" tagColor={C.gold} title={b.title} done={done}>
+      <div style={{ fontSize: 13.5, lineHeight: 1.8, marginBottom: 8 }}>{b.desc}</div>
+      <ul style={{ margin: "0 0 10px", paddingLeft: 18 }}>
+        {(b.cards || []).map((c, i) => <li key={i} style={{ fontSize: 13.5, lineHeight: 1.9 }}>{c}</li>)}
+      </ul>
+      {!done && <button onClick={() => onDone()} style={sBtn}>場合分けを一通り練習した</button>}
+    </BlockShell>
+  );
+}
+
+function SectionGate({ blocks, isDone, status, accent, needApproval, onRequest, onBack, demo }) {
+  const cnt = blocks.filter(isDone).length;
+  const all = cnt === blocks.length;
+  return (
+    <div style={{ borderTop: `2px dashed ${C.line}`, marginTop: 4, paddingTop: 16 }}>
+      <div style={{ background: "linear-gradient(90deg,#e6a23c,#d97a2b)", color: "#fff", borderRadius: 8, padding: "9px 14px", fontWeight: 700, fontSize: 14, marginBottom: 12 }}>セクション修了の判定</div>
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 6 }}>学習ブロック {cnt} / {blocks.length} 完了</div>
+      <Bar v={blocks.length ? (cnt / blocks.length) * 100 : 0} bg={C.line} fg={accent} />
+      {!all && <div style={{ fontSize: 12.5, color: C.sub, marginTop: 10 }}>すべてのブロックを完了すると、上長に承認を申請できます。</div>}
+      {all && !needApproval && <div style={{ fontSize: 13.5, color: C.green, fontWeight: 700, marginTop: 12 }}>✓ 修了しました（このセクションは承認不要です）</div>}
+      {all && needApproval && status === "" && (
+        <button onClick={onRequest} style={{ marginTop: 12, width: "100%", padding: "11px 0", border: "none", borderRadius: 8, background: C.ink, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: sans }}>上長に承認を申請する</button>
+      )}
+      {status === "申請中" && <div style={{ fontSize: 13.5, color: C.gold, fontWeight: 700, marginTop: 12 }}>承認待ち…（上長の判断を待っています）</div>}
+      {status === "承認済" && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 13.5, color: C.green, fontWeight: 700, marginBottom: 10 }}>✓ 上長が承認しました。次のセクションが解放されました。</div>
+          <button onClick={onBack} style={{ width: "100%", padding: "11px 0", border: "none", borderRadius: 8, background: C.green, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: sans }}>次のセクションへ進む</button>
+        </div>
+      )}
+      {demo && <div style={{ fontSize: 11.5, color: C.sub, marginTop: 10 }}>※ サンプル表示中は記録されません。</div>}
+      <div style={{ fontSize: 11.5, color: C.sub, marginTop: 12, lineHeight: 1.6 }}>※ 次へ進めるのは、上長がOKを判断した後だけです（識学：自己申告では昇格しない）。</div>
+    </div>
+  );
+}
+
+/* ---------- 学習レポート ---------- */
+function ReportView({ roadmap }) {
+  const rm = roadmap || { items: [] };
+  const items = rm.items || [];
+  const got = items.filter((i) => i.done).length;
+  const mobile = useIsMobile();
+  if (!items.length) return (
+    <div>
+      <H title="学習レポート" />
+      <div style={{ ...card, padding: 40, textAlign: "center" }}>
+        <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 18, color: C.ink }}>昇格基準がまだ登録されていません</div>
+        <div style={{ fontSize: 13.5, color: C.sub, marginTop: 12, lineHeight: 1.9, maxWidth: 470, margin: "12px auto 0" }}>
+          スプレッドシートの ⑥昇格基準 に、この役職の10項目を登録してください。○は ⑦昇格判定 から読み込まれます。
+        </div>
+      </div>
+    </div>
+  );
+  return (
+    <div>
+      <H title="学習レポート" />
+      <div style={{ ...card, padding: mobile ? 18 : 22, marginBottom: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 20, color: C.ink }}>{rm.goal}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginTop: 4 }}>評価軸：{rm.axis} ／ 期間：{rm.span}</div>
+          </div>
+          <div style={{ marginLeft: mobile ? 0 : "auto", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              {items.map((it) => (
+                <div key={it.n} title={it.t} style={{
+                  width: 22, height: 30, borderRadius: 3, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 700, border: `1px solid ${it.done ? "transparent" : C.line}`,
+                  background: it.done ? (BAND[it.band] || C.ink) : "#fff", color: it.done ? "#fff" : "#c9c2b4",
+                }}>{it.done ? "○" : it.n}</div>
+              ))}
+            </div>
+            <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 26, color: C.ink }}>{got}<span style={{ fontSize: 15, color: C.sub }}> / {items.length}</span></div>
+            <span style={{ fontSize: 12, fontWeight: 700, padding: "5px 12px", borderRadius: 99, background: got === items.length ? "#e6f4ec" : "#fbe9e7", color: got === items.length ? C.green : C.shu }}>
+              {got === items.length ? "上長承認まち" : "未認定"}
+            </span>
+          </div>
+        </div>
+        <div style={{ fontSize: 11.5, color: C.sub }}>この○は、スプレッドシートの ⑦昇格判定 から読み込んでいます。自己申告では○になりません。</div>
+      </div>
+
+      {Object.keys(BAND).map((b) => {
+        const rowsB = items.filter((i) => i.band === b);
+        if (!rowsB.length) return null;
+        return (
+          <div key={b} style={{ marginBottom: 18 }}>
+            <div style={{ display: "inline-block", background: BAND[b], color: "#fff", fontSize: 12, fontWeight: 700, padding: "5px 14px", borderRadius: "8px 8px 0 0" }}>{b}</div>
+            <div style={{ ...card, borderRadius: "0 10px 10px 10px", overflow: "hidden" }}>
+              {rowsB.map((it, i) => (
+                <div key={it.n} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 15px", borderTop: i ? `1px solid ${C.line}` : "none", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 12, color: C.sub, width: 16 }}>{it.n}</span>
+                  <span style={{ flex: 1, minWidth: 180, fontSize: 13.5, lineHeight: 1.6 }}>
+                    {it.t}
+                    {it.memo && <span style={{ display: "block", fontSize: 11.5, color: C.sub, marginTop: 3 }}>実績：{it.memo}</span>}
+                  </span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: BAND[b], whiteSpace: "nowrap" }}>{it.line}</span>
+                  <span style={{ fontSize: 11, color: C.sub, whiteSpace: "nowrap" }}>{it.src}</span>
+                  <span style={{ width: 22, textAlign: "center", fontWeight: 700, fontSize: 15, color: it.done ? C.green : "#c9c2b4" }}>{it.done ? "○" : "—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------- 業務マニュアル ---------- */
+function ManualView({ manual, role }) {
+  const common = (manual || []).filter((m) => m.rank === "共通");
+  const own = (manual || []).filter((m) => m.rank !== "共通");
+  const groups = [{ label: "全員が覚えること", items: common }];
+  if (own.length) groups.push({ label: `${role}が覚えること`, items: own });
+  return (
+    <div>
+      <H title="業務マニュアル（暗記編）" />
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 18, lineHeight: 1.8 }}>
+        ここは<b>覚えるもの</b>です。単価表や各シートは「その場で開いて見るもの」なので載せていません。確認テストはここから出ます。
+      </div>
+      {groups.map((g) => g.items.length > 0 && (
+        <div key={g.label} style={{ marginBottom: 26 }}>
+          <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 17, color: C.ink, marginBottom: 12 }}>{g.label}</div>
+          {g.items.map((s, i) => (
+            <div key={i} style={{ ...card, padding: 18, marginBottom: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
+                <span style={{ width: 4, height: 18, background: C.shu, borderRadius: 2 }} />
+                <span style={{ fontWeight: 700, fontSize: 15 }}>{s.h}</span>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: 20 }}>
+                {s.li.map((x, j) => <li key={j} style={{ fontSize: 13.5, lineHeight: 1.95 }}>{x}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ))}
+      <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.8 }}>※ 上の役職の内容は表示されません。決めていい範囲が変わると、覚えることも変わるためです。</div>
+    </div>
+  );
+}
+
+/* ---------- Q&A ---------- */
+function QAView({ qa }) {
+  const [q, setQ] = useState("");
+  const list = (qa || []).filter((x) => (x.q + x.a + x.cat).includes(q));
+  return (
+    <div>
+      <H title="Q&A（よくある場面の対応）" />
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="キーワードで検索（例：クレーム、単価、面談）" style={{ ...inp, marginBottom: 16, maxWidth: 420 }} />
+      {list.map((x, i) => (
+        <div key={i} style={{ ...card, padding: 16, marginBottom: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", background: C.gold, padding: "3px 10px", borderRadius: 99 }}>{x.cat}</span>
+          <div style={{ fontWeight: 700, fontSize: 14.5, margin: "10px 0 6px" }}>Q. {x.q}</div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.8 }}>A. {x.a}</div>
+        </div>
+      ))}
+      {!list.length && <div style={{ ...card, padding: 30, textAlign: "center", color: C.sub, fontSize: 13.5 }}>該当する場面がありません。AIに相談してください。</div>}
+      <div style={{ fontSize: 12, color: C.sub, marginTop: 6 }}>※ ここにない場面はAIに相談 → それでも判断がつかない例外だけ上長へ。</div>
+    </div>
+  );
+}
+
+/* ---------- 承認（課長以上） ---------- */
+function TeamView({ token, demo }) {
+  const [team, setTeam] = useState(null);
+  const [msg, setMsg] = useState("");
+  const load = useCallback(async () => {
+    if (demo) { setTeam([{ id: "E001", name: "サンプル 太郎", rank: "課員", waiting: ["staff-G1-SEC"], judged: 3 }]); return; }
+    const r = await api("team", { token });
+    if (r.ok) setTeam(r.team); else setMsg(r.error || "読み込めませんでした。");
+  }, [token, demo]);
+  useEffect(() => { load(); }, [load]);
+
+  const ok = async (empId, blockId) => {
+    if (demo) { setMsg("サンプル表示中は記録されません。"); return; }
+    const r = await api("approve", { token, empId, blockId });
+    setMsg(r.ok ? "承認しました。" : r.error);
+    load();
+  };
+
+  return (
+    <div>
+      <H title="承認" />
+      <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 18, lineHeight: 1.8 }}>
+        自己申告では○になりません。現場で見た事実で判定してください。昇格基準の10項目は、スプレッドシートの ⑦昇格判定 で ○ を付けます。
+      </div>
+      {msg && <div style={{ ...card, padding: 12, marginBottom: 12, fontSize: 13, color: C.shu }}>{msg}</div>}
+      {!team ? <div style={{ color: C.sub, fontSize: 13 }}>読み込み中…</div> : team.map((m) => (
+        <div key={m.id} style={{ ...card, padding: 16, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>{m.name}</span>
+            <span style={{ fontSize: 12, color: C.sub }}>{m.rank}</span>
+            <span style={{ fontSize: 12, color: C.sub }}>昇格基準 {m.judged}項目 達成</span>
+          </div>
+          {m.waiting.length ? m.waiting.map((w) => (
+            <div key={w} style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13 }}>承認まち：{w}</span>
+              <button onClick={() => ok(m.id, w)} style={{ ...sBtn, background: C.ink }}>承認する</button>
+            </div>
+          )) : <div style={{ fontSize: 12.5, color: C.sub, marginTop: 8 }}>承認まちはありません。</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ---------- AI ---------- */
+async function askAI({ token, demo, system, messages }) {
+  if (demo) return "サンプル表示中はAIに接続できません。GAS_URL を設定してください。";
+  const r = await api("ai", { token, system, messages });
+  return r.ok ? r.text : "エラー：" + (r.error || "応答がありませんでした。");
+}
+
+function AIPanel({ step, mobile, token, demo }) {
+  const [tab, setTab] = useState("ai");
+  const starter = `「${step.title}」だね。まず今の状況を教えて。近いものを選んでOK👇\n1. もうできる（自信あり）\n2. 動画は見たけど言葉が出てこない\n3. 相手の反応別の言い回しが知りたい\n4. ここで困っている（具体的に書く）`;
+  const [msgs, setMsgs] = useState([{ role: "assistant", content: starter }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const boxRef = useRef(null);
+  useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, loading]);
+
+  const sys = `あなたは株式会社ASXEEDの研修アシスタント「勝ち型コーチ」です。受講者は今「${step.title}」を学習中。
+識学に基づき次を守る：
+1. まず受講者の現状を確認し、レベルに合わせる。
+2. 答えを丸ごと代行せず、本人が自分でできるよう導く。
+3. 場合分けの質問には、相手の反応別にそのまま使える短い文言を示す。PREP・サンドイッチ話法を使う。
+4. 受講者の役職では決められないことは「持ち帰る」よう促し、その場の返し方を示す。
+5. 判断・例外は「事実と結論を持って上長に相談」するよう促す。
+回答は簡潔（4〜6文）。日本語。`;
+
+  const send = async (text) => {
+    const t = (text ?? input).trim();
+    if (!t || loading) return;
+    const next = [...msgs, { role: "user", content: t }];
+    setMsgs(next); setInput(""); setLoading(true);
+    const reply = await askAI({ token, demo, system: sys, messages: next });
+    setMsgs([...next, { role: "assistant", content: reply }]);
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ flex: mobile ? "1 1 100%" : "1 1 320px", minWidth: mobile ? 0 : 300, width: mobile ? "100%" : "auto", background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", height: mobile ? 460 : 560 }}>
+      <div style={{ background: C.ink, color: C.paper, padding: "11px 16px", borderRadius: "11px 11px 0 0", fontWeight: 700, fontSize: 14 }}>質問・サポート</div>
+      <div style={{ display: "flex", borderBottom: `1px solid ${C.line}` }}>
+        {[["ai", "AIと一緒に進める"], ["sensei", "上長に相談する"]].map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ flex: 1, padding: "10px 0", border: "none", cursor: "pointer", fontFamily: sans, fontSize: 13, fontWeight: 700, background: "transparent", color: tab === k ? C.shu : C.sub, borderBottom: tab === k ? `2px solid ${C.shu}` : "2px solid transparent" }}>{l}</button>
+        ))}
+      </div>
+      {tab === "ai" ? (
+        <>
+          <div ref={boxRef} style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+            {msgs.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "88%", background: m.role === "user" ? C.shu : "#f1ede3", color: m.role === "user" ? "#fff" : C.text, padding: "9px 12px", borderRadius: 12, fontSize: 13.5, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{m.content}</div>
+            ))}
+            {msgs.length === 1 && <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 2 }}>{["1", "2", "3"].map((n) => <button key={n} onClick={() => send(n)} style={chip}>{n}</button>)}</div>}
+            {loading && <div style={{ alignSelf: "flex-start", color: C.sub, fontSize: 13 }}>考え中…</div>}
+          </div>
+          <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${C.line}` }}>
+            <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="状況や質問を入力…" style={{ flex: 1, padding: "9px 12px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 13.5, fontFamily: sans, color: C.text }} />
+            <button onClick={() => send()} disabled={loading} style={{ padding: "0 16px", border: "none", borderRadius: 8, background: C.shu, color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: sans }}>送信</button>
+          </div>
+        </>
+      ) : (
+        <div style={{ flex: 1, padding: 18, fontSize: 13.5, lineHeight: 1.9, overflowY: "auto" }}>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>上長に相談する前に（識学ルール）</div>
+          AIとQ&Aで解決できない判断・例外だけを上げます。相談は「丸投げ」ではなく、次の形で。
+          <ol style={{ paddingLeft: 18, marginTop: 8 }}>
+            <li>事実：何が起きているか</li>
+            <li>自分の結論：どうしたいか</li>
+            <li>確認したい点：判断を仰ぐ一点</li>
+          </ol>
+          <div style={{ background: "#f1ede3", borderRadius: 8, padding: 12, marginTop: 8, color: C.sub }}>この形式に整えるだけで、上長の判断は速くなり、あなたの評価も上がります。</div>
+        </div>
+      )}
+    </div>
+  );
+}
+const chip = { border: `1px solid ${C.shu}`, color: C.shu, background: "transparent", borderRadius: 99, padding: "5px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: sans };
+
+const CATS = ["クライアント対応", "パートナー商談", "現場応対", "クレーム対応", "人員・アサイン"];
+function ConsultView({ role, token, demo }) {
+  const [cat, setCat] = useState(CATS[0]);
+  const [msgs, setMsgs] = useState([{ role: "assistant", content: "実戦サポートAIです。カテゴリを選び、状況を書いてください。状況の整理・対応方針・そのまま使える文言を返します。" }]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const boxRef = useRef(null);
+  useEffect(() => { if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight; }, [msgs, loading]);
+
+  if (!canConsult(role)) return (
+    <div>
+      <H title="AI相談（実戦サポート）" />
+      <div style={{ ...card, padding: 40, textAlign: "center" }}>
+        <div style={{ fontSize: 34, marginBottom: 10 }}>🔒</div>
+        <div style={{ fontFamily: mincho, fontWeight: 900, fontSize: 18, color: C.ink }}>主任以上で解放されます</div>
+        <div style={{ fontSize: 13.5, color: C.sub, marginTop: 12, lineHeight: 1.9, maxWidth: 470, margin: "12px auto 0" }}>
+          このAIは、クライアント対応・パートナー商談・クレーム対応の実戦的な文言を扱います。会社の交渉ノウハウにあたるため、主任に昇格すると使えるようになります。
+        </div>
+      </div>
+    </div>
+  );
+
+  const sys = `あなたは株式会社ASXEEDの実戦サポートAIです。利用者は${role}。相談カテゴリは「${cat}」。
+識学に基づき、事実と数値で判断し、属人化しない再現可能な対応を示す。PREP・サンドイッチ話法を使う。
+利用者の役職で決められないこと（主任なら単価交渉、課長なら例外承認）は、代わりに決めさせず「持ち帰る」文言を示す。
+回答は3部構成で簡潔に：【状況の整理】1〜2文／【対応方針】2〜3点／【そのまま使える文言】1〜2案。日本語。`;
+
+  const send = async () => {
+    const t = input.trim();
+    if (!t || loading) return;
+    const next = [...msgs, { role: "user", content: t }];
+    setMsgs(next); setInput(""); setLoading(true);
+    const reply = await askAI({ token, demo, system: sys, messages: next });
+    setMsgs([...next, { role: "assistant", content: reply }]);
+    setLoading(false);
+  };
+
+  return (
+    <div>
+      <H title="AI相談（実戦サポート）" />
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+        {CATS.map((c) => (
+          <button key={c} onClick={() => setCat(c)} style={{ padding: "7px 14px", borderRadius: 99, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: sans, border: c === cat ? `1.5px solid ${C.ink}` : `1px solid ${C.line}`, background: c === cat ? C.ink : "transparent", color: c === cat ? C.paper : C.sub }}>{c}</button>
+        ))}
+      </div>
+      <div style={{ background: "#fff", border: `1px solid ${C.line}`, borderRadius: 12, display: "flex", flexDirection: "column", height: 500 }}>
+        <div ref={boxRef} style={{ flex: 1, overflowY: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+          {msgs.map((m, i) => (
+            <div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "86%", background: m.role === "user" ? C.shu : "#f1ede3", color: m.role === "user" ? "#fff" : C.text, padding: "10px 13px", borderRadius: 12, fontSize: 13.5, lineHeight: 1.8, whiteSpace: "pre-wrap" }}>{m.content}</div>
+          ))}
+          {loading && <div style={{ alignSelf: "flex-start", color: C.sub, fontSize: 13 }}>考え中…</div>}
+        </div>
+        <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${C.line}` }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder={`${cat}の状況を入力…`} style={{ flex: 1, padding: "10px 13px", borderRadius: 8, border: `1px solid ${C.line}`, fontSize: 13.5, fontFamily: sans, color: C.text }} />
+          <button onClick={send} disabled={loading} style={{ padding: "0 18px", border: "none", borderRadius: 8, background: C.shu, color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: sans }}>送信</button>
+        </div>
+      </div>
+      <div style={{ fontSize: 11.5, color: C.sub, marginTop: 8 }}>※ 主任以上限定。判断しきれない例外は、事実と結論を持って上長へ。</div>
+    </div>
+  );
+}
+
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
