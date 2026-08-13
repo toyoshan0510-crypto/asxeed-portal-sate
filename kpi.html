@@ -76,15 +76,8 @@
     transition:.25s;pointer-events:none;z-index:99}
   .toast.on{opacity:1}
   .hide{display:none}
-  #lock{position:fixed;inset:0;z-index:999;background:var(--navy);color:#fff;
-        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
-  #lock h1{font-size:19px;margin:0 0 6px;letter-spacing:.04em}
-  #lock p{font-size:13px;opacity:.7;margin:0 0 22px}
-  #lock input{width:210px;text-align:center;font-size:26px;letter-spacing:.4em;
               padding:13px;border:0;border-radius:12px;color:var(--ink)}
-  #lock button{margin-top:14px;width:210px;padding:13px;border:0;border-radius:12px;
                background:#fff;color:var(--navy);font-size:16px;font-weight:700}
-  #lock .ng{margin-top:14px;font-size:13px;color:#ffb3ba;height:18px}
   .stale{opacity:.45;transition:.2s}
   .err{background:var(--redbg);border:1px solid var(--red);color:var(--red);
        border-radius:12px;padding:14px;font-size:13px;line-height:1.7}
@@ -104,14 +97,6 @@
 </style>
 </head>
 <body>
-
-<div id="lock" class="hide">
-  <h1>ASXEED KPI</h1>
-  <p>暗証番号を入力してください</p>
-  <input id="pin" type="tel" inputmode="numeric" maxlength="8" autocomplete="off">
-  <button onclick="tryPin()">開く</button>
-  <div class="ng" id="pin-ng"></div>
-</div>
 
 <header>
   <h1>ASXEED KPI</h1>
@@ -180,12 +165,10 @@
  * ================================================================ */
 const API = 'https://script.google.com/macros/s/AKfycbxGTZZvm4Aax-ynJCqpvgmGnj_2os4X-4RNQ7p8osTgwpaHvivGejq5aXkFRsLAHS_g/exec';
 
-function apiCall(action, payload, token){
+function apiCall(action, payload){
   const u = API + '?action=' + encodeURIComponent(action)
-          + '&token=' + encodeURIComponent(token || '')
           + '&payload=' + encodeURIComponent(JSON.stringify(payload || {}));
   return fetch(u).then(r => r.json()).then(j => {
-    if(j && j.auth === false) throw new Error('PIN_NG');
     if(j && j.error) throw new Error(j.error);
     return j.data;
   });
@@ -196,11 +179,11 @@ function apiCall(action, payload, token){
 const google = { script: { run: (function(){
   let ok = null, ng = null;
   const M = {
-    boot:          pin            => ['boot',   {},                              pin],
-    getPerfTeams:  (f, pin)       => ['teams',  { force: !!f },                  pin],
-    getPerfPerson: (n, f, pin)    => ['person', { name: n, force: !!f },         pin],
-    markDone:      (t, r, pin)    => ['done',   { type: t, row: r },             pin],
-    addLog:        (t, o, pin)    => ['add',    { type: t, obj: o },             pin]
+    boot:          ()       => ['boot',   {}],
+    getPerfTeams:  f        => ['teams',  { force: !!f }],
+    getPerfPerson: (n, f)   => ['person', { name: n, force: !!f }],
+    markDone:      (t, r)   => ['done',   { type: t, row: r }],
+    addLog:        (t, o)   => ['add',    { type: t, obj: o }]
   };
   const self = {
     withSuccessHandler(f){ ok = f; return self; },
@@ -210,15 +193,9 @@ const google = { script: { run: (function(){
     self[name] = function(){
       const a = M[name].apply(null, arguments);
       const s = ok, e = ng; ok = null; ng = null;
-      apiCall(a[0], a[1], a[2]).then(d => s && s(d)).catch(err => e ? e(err) : console.error(err));
+      apiCall(a[0], a[1]).then(d => s && s(d)).catch(err => e ? e(err) : console.error(err));
     };
   });
-  // 暗証番号の照合だけはAPIを1回叩いて判定する
-  self.auth = function(pin){
-    const s = ok, e = ng; ok = null; ng = null;
-    apiCall('boot', {}, pin).then(() => s && s(true))
-      .catch(err => (String(err.message).indexOf('PIN_NG') >= 0) ? (s && s(false)) : (e ? e(err) : null));
-  };
   return self;
 })() } };
 
@@ -266,49 +243,6 @@ function showErr(e){
   document.body.classList.remove('stale');
 }
 
-/* ---------- 暗証番号 ---------- */
-let PIN = localStorage.getItem('kpiPin') || '';
-
-function showLock(msg){
-  $('lock').classList.remove('hide');
-  $('pin-ng').textContent = msg || '';
-  $('pin').value = '';
-  setTimeout(()=>$('pin').focus(), 120);
-}
-function hideLock(){ $('lock').classList.add('hide'); }
-
-function tryPin(){
-  const v = $('pin').value.trim();
-  if(!v){ $('pin-ng').textContent = '入力してください'; return; }
-  $('pin-ng').textContent = '確認中…';
-  google.script.run
-    .withSuccessHandler(okFlag=>{
-      if(okFlag){
-        PIN = v; localStorage.setItem('kpiPin', v);
-        hideLock(); start();
-      } else {
-        $('pin-ng').textContent = '番号が違います';
-        $('pin').value = '';
-      }
-    })
-    .withFailureHandler(e=>{ $('pin-ng').textContent = (e&&e.message)||'通信エラー'; })
-    .auth(v);
-}
-document.addEventListener('keydown', e=>{
-  if(e.key === 'Enter' && !$('lock').classList.contains('hide')) tryPin();
-});
-
-/** 認証エラーならロック画面に戻す。戻したら true */
-function relock(e){
-  const m = (e && e.message) ? e.message : String(e);
-  if(m.indexOf('PIN_NG') >= 0){
-    PIN = ''; localStorage.removeItem('kpiPin');
-    showLock('番号が変更されています。入力し直してください');
-    return true;
-  }
-  return false;
-}
-
 /* ---------- 起動：キャッシュを即描画 → 裏で最新取得 ---------- */
 function start(){
   try{
@@ -318,9 +252,7 @@ function start(){
   load(false);
 }
 
-(function init(){
-  if(PIN) start(); else showLock('');
-})();
+start();
 
 function load(manual){
   if(manual) toast('更新中…');
@@ -334,8 +266,8 @@ function load(manual){
       if(manual) toast('最新にしました');
       loadPerf(!!manual);
     })
-    .withFailureHandler(e=>{ if(!relock(e)) showErr(e); })
-    .boot(PIN);
+    .withFailureHandler(e=>{ showErr(e); })
+    .boot();
 }
 
 /* ---------- 売上・利益（別ファイル群。必要な分だけ取りに行く） ---------- */
@@ -351,8 +283,8 @@ function loadTeams(force){
       P.teams = r.teams || {}; P.month = r.month; P.tErr = r.error || '';
       savePerf(); fillWho(); renderPerf();
     })
-    .withFailureHandler(e=>{ if(relock(e)) return; P.tErr = (e&&e.message)||String(e); renderPerf(); })
-    .getPerfTeams(!!force, PIN);
+    .withFailureHandler(e=>{ P.tErr = (e&&e.message)||String(e); renderPerf(); })
+    .getPerfTeams(!!force);
 }
 
 /** 個人分。キャッシュがあれば即表示し、必ず裏で最新を取り直す */
@@ -367,11 +299,10 @@ function loadPerson(name, force){
       savePerf(); renderPerf();
     })
     .withFailureHandler(e=>{
-      if(relock(e)) return;
       P.people[name] = { error:(e&&e.message)||String(e) };
       renderPerf();
     })
-    .getPerfPerson(name, !!force, PIN);
+    .getPerfPerson(name, !!force);
 }
 
 function loadPerf(force){
@@ -618,8 +549,8 @@ function done(type,row,btn){
       renderTodo(); renderNum(); toast('完了にしました');
     })
     .withFailureHandler(e=>{ btn.disabled=false; btn.textContent='✓ 完了にする';
-      if(!relock(e)) showErr(e); })
-    .markDone(type,row,PIN);
+      showErr(e); })
+    .markDone(type,row);
 }
 
 /* ---------- 入力 ---------- */
@@ -662,8 +593,8 @@ function send(){
       renderNum(); buildForm(); toast(msg); tab('num');
     })
     .withFailureHandler(e=>{ btn.disabled=false; btn.textContent='この内容で登録する';
-      if(!relock(e)) showErr(e); })
-    .addLog(TYPE, obj, PIN);
+      showErr(e); })
+    .addLog(TYPE, obj);
 }
 </script>
 </body>
