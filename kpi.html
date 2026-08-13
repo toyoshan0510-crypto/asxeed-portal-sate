@@ -89,13 +89,6 @@
   .err{background:var(--redbg);border:1px solid var(--red);color:var(--red);
        border-radius:12px;padding:14px;font-size:13px;line-height:1.7}
   .err b{display:block;margin-bottom:6px;font-size:14px}
-  #gate{position:fixed;inset:0;z-index:200;background:var(--navy);color:#fff;
-        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px}
-  #gate h2{font-size:17px;margin:0 0 6px} #gate p{font-size:13px;opacity:.75;margin:0 0 20px}
-  #gate input{max-width:280px;text-align:center}
-  #gate button{max-width:280px;margin-top:12px;width:100%;padding:13px;border:0;
-               border-radius:12px;background:#fff;color:var(--navy);font-size:15px;font-weight:700}
-  #gate .ng{color:#ffb3ba;font-size:13px;margin-top:12px;min-height:18px}
   .box{background:var(--card);border:1px solid var(--line);border-radius:14px;
        padding:13px;margin-bottom:12px}
   .box h2{font-size:13px;margin:0 0 10px;color:var(--sub)}
@@ -173,14 +166,6 @@
   </div>
 </section>
 
-<div id="gate" class="hide">
-  <h2>ASXEED KPI</h2>
-  <p>合言葉を入力してください（初回のみ）</p>
-  <input type="password" id="gate-pw" autocomplete="off" placeholder="合言葉">
-  <button onclick="tryLogin()">開く</button>
-  <div class="ng" id="gate-ng"></div>
-</div>
-
 <nav>
   <button id="t-todo" class="on" onclick="tab('todo')"><i>🔴</i>やること</button>
   <button id="t-add" onclick="tab('add')"><i>✏️</i>入力</button>
@@ -194,28 +179,28 @@
  *  ▼ ウェブアプリURLを更新した場合はここだけ差し替えてください
  * ================================================================ */
 const API = 'https://script.google.com/macros/s/AKfycbxGTZZvm4Aax-ynJCqpvgmGnj_2os4X-4RNQ7p8osTgwpaHvivGejq5aXkFRsLAHS_g/exec';
-let TOKEN = localStorage.getItem('kpiToken') || '';
 
-function apiCall(action, payload){
+function apiCall(action, payload, token){
   const u = API + '?action=' + encodeURIComponent(action)
-          + '&token=' + encodeURIComponent(TOKEN)
+          + '&token=' + encodeURIComponent(token || '')
           + '&payload=' + encodeURIComponent(JSON.stringify(payload || {}));
   return fetch(u).then(r => r.json()).then(j => {
-    if(j && j.auth === false){ askLogin('合言葉が違います'); throw new Error('合言葉が違います'); }
+    if(j && j.auth === false) throw new Error('PIN_NG');
     if(j && j.error) throw new Error(j.error);
     return j.data;
   });
 }
 
-/* google.script.run と同じ書き味で使えるようにする薄い層 */
+/* google.script.run と同じ書き味で使えるようにする薄い層
+   （最後の引数が暗証番号。auth だけはこちらで判定する） */
 const google = { script: { run: (function(){
   let ok = null, ng = null;
   const M = {
-    boot:          () => ['boot', {}],
-    getPerfTeams:  f => ['teams', { force: !!f }],
-    getPerfPerson: (n, f) => ['person', { name: n, force: !!f }],
-    markDone:      (t, r) => ['done', { type: t, row: r }],
-    addLog:        (t, o) => ['add', { type: t, obj: o }]
+    boot:          pin            => ['boot',   {},                              pin],
+    getPerfTeams:  (f, pin)       => ['teams',  { force: !!f },                  pin],
+    getPerfPerson: (n, f, pin)    => ['person', { name: n, force: !!f },         pin],
+    markDone:      (t, r, pin)    => ['done',   { type: t, row: r },             pin],
+    addLog:        (t, o, pin)    => ['add',    { type: t, obj: o },             pin]
   };
   const self = {
     withSuccessHandler(f){ ok = f; return self; },
@@ -225,33 +210,17 @@ const google = { script: { run: (function(){
     self[name] = function(){
       const a = M[name].apply(null, arguments);
       const s = ok, e = ng; ok = null; ng = null;
-      apiCall(a[0], a[1]).then(d => s && s(d)).catch(err => e ? e(err) : console.error(err));
+      apiCall(a[0], a[1], a[2]).then(d => s && s(d)).catch(err => e ? e(err) : console.error(err));
     };
   });
+  // 暗証番号の照合だけはAPIを1回叩いて判定する
+  self.auth = function(pin){
+    const s = ok, e = ng; ok = null; ng = null;
+    apiCall('boot', {}, pin).then(() => s && s(true))
+      .catch(err => (String(err.message).indexOf('PIN_NG') >= 0) ? (s && s(false)) : (e ? e(err) : null));
+  };
   return self;
 })() } };
-
-/* ---------- 合言葉 ---------- */
-function askLogin(msg){
-  document.getElementById('gate').classList.remove('hide');
-  document.getElementById('gate-ng').textContent = msg || '';
-  const el = document.getElementById('gate-pw');
-  el.value = ''; setTimeout(()=>el.focus(), 100);
-}
-function tryLogin(){
-  const v = document.getElementById('gate-pw').value.trim();
-  if(!v){ document.getElementById('gate-ng').textContent = '入力してください'; return; }
-  TOKEN = v;
-  document.getElementById('gate-ng').textContent = '確認中…';
-  apiCall('boot', {}).then(()=>{
-    localStorage.setItem('kpiToken', TOKEN);
-    document.getElementById('gate').classList.add('hide');
-    init();
-  }).catch(()=>{});
-}
-document.addEventListener('keydown', ev=>{
-  if(ev.key === 'Enter' && !document.getElementById('gate').classList.contains('hide')) tryLogin();
-});
 
 /* ---------- 入力フォーム定義（キーは コード.gs の CFG.col と対応） ---------- */
 const FORMS = {
