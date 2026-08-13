@@ -24,8 +24,8 @@
 
   /* ---------- ヘッダー（2段組。プルダウンは全幅） ---------- */
   header{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;
-         padding:12px 14px calc(12px + env(safe-area-inset-top,0)) 14px;
-         padding-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+         padding:calc(12px + env(safe-area-inset-top,0px)) 14px 12px 14px;
+         display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   header h1{font-size:16px;margin:0;font-weight:700;flex:1 1 auto}
   header .rel{width:46px;height:46px;flex:none;background:#33405f;border:0;color:#fff;
               border-radius:12px;font-size:22px;line-height:1}
@@ -191,12 +191,30 @@
  * ================================================================ */
 const API = 'https://script.google.com/macros/s/AKfycbxGTZZvm4Aax-ynJCqpvgmGnj_2os4X-4RNQ7p8osTgwpaHvivGejq5aXkFRsLAHS_g/exec';
 
+/* iOSのホーム画面アプリからでも確実に通信できるよう、scriptタグ方式で取得します */
+let _cbSeq = 0;
 function apiCall(action, payload){
-  const u = API + '?action=' + encodeURIComponent(action)
-          + '&payload=' + encodeURIComponent(JSON.stringify(payload || {}));
-  return fetch(u).then(r => r.json()).then(j => {
-    if(j && j.error) throw new Error(j.error);
-    return j.data;
+  return new Promise((resolve, reject)=>{
+    const cb = 'kpicb' + (++_cbSeq) + '_' + Date.now();
+    let sc = null, timer = null;
+    const cleanup = ()=>{
+      if(timer) clearTimeout(timer);
+      try{ delete window[cb]; }catch(e){ window[cb] = undefined; }
+      if(sc && sc.parentNode) sc.parentNode.removeChild(sc);
+    };
+    window[cb] = j => {
+      cleanup();
+      if(j && j.error) reject(new Error(j.error));
+      else resolve(j ? j.data : null);
+    };
+    sc = document.createElement('script');
+    sc.async = true;
+    sc.src = API + '?action=' + encodeURIComponent(action)
+           + '&payload=' + encodeURIComponent(JSON.stringify(payload || {}))
+           + '&callback=' + cb;
+    sc.onerror = ()=>{ cleanup(); reject(new Error('サーバーに接続できませんでした')); };
+    timer = setTimeout(()=>{ cleanup(); reject(new Error('通信がタイムアウトしました')); }, 90000);
+    document.head.appendChild(sc);
   });
 }
 
