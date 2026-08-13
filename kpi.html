@@ -2,24 +2,700 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1f2a44">
-<title>ASXEED KPI</title>
 <style>
-  html,body{margin:0;padding:0;height:100%;background:#f4f6fa;overflow:hidden}
-  iframe{display:block;width:100%;height:100%;border:0}
+  :root{
+    --bg:#f4f6fa; --card:#fff; --line:#e2e6ee; --ink:#1b2333; --sub:#68738a;
+    --navy:#1f2a44; --red:#c1121f; --redbg:#fdeaec; --yel:#b06f00; --yelbg:#fff6e0;
+    --grn:#146c43; --grnbg:#e3f3e9;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:0 0 76px;background:var(--bg);color:var(--ink);
+       font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+       font-size:15px;line-height:1.55}
+  header{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;
+         padding:9px 12px;display:flex;gap:8px;align-items:center}
+  header h1{font-size:14px;margin:0;font-weight:700;white-space:nowrap}
+  header select{margin-left:auto;background:#33405f;color:#fff;border:0;
+                border-radius:8px;padding:7px 9px;font-size:14px;max-width:44%}
+  header .rel{background:#33405f;border:0;color:#fff;border-radius:8px;
+              padding:7px 10px;font-size:15px;line-height:1}
+  .wrap{padding:12px}
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:14px;
+           padding:12px;text-align:center}
+  .kpi b{display:block;font-size:29px;line-height:1.1;margin-top:2px}
+  .kpi .r b{color:var(--red)} .kpi .y b{color:var(--yel)}
+  .kpi span{font-size:12px;color:var(--sub)}
+
+  .goal{background:var(--card);border:1px solid var(--line);border-radius:14px;
+        padding:13px;margin-bottom:12px}
+  .goal h2{font-size:13px;margin:0 0 10px;color:var(--sub)}
+  .g{margin-bottom:12px} .g:last-child{margin-bottom:0}
+  .grow{display:flex;align-items:baseline;font-size:13px;margin-bottom:5px}
+  .grow em{font-style:normal;font-weight:700}
+  .grow .n{margin-left:auto;font-weight:700;font-size:15px}
+  .grow .n s{text-decoration:none;color:var(--sub);font-weight:400;font-size:12px}
+  .bar{height:8px;background:#eef1f6;border-radius:99px;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;background:var(--red);transition:width .4s}
+  .bar i.ok{background:var(--grn)}
+  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:7px}
+  .badge.ok{background:var(--grnbg);color:var(--grn)}
+  .badge.ng{background:var(--redbg);color:var(--red)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);
+        border-radius:12px;padding:12px;margin-bottom:10px}
+  .card.r{border-left-color:var(--red)} .card.y{border-left-color:var(--yel)}
+  .top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
+  .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
+  .tag.r{background:var(--redbg);color:var(--red)} .tag.y{background:var(--yelbg);color:var(--yel)}
+  .tag.g{background:#eef2f7;color:var(--sub)}
+  .due{margin-left:auto;font-size:12px;color:var(--sub);font-weight:700}
+  .ttl{font-weight:700;font-size:14px}
+  .bd{font-size:13px;color:var(--sub);margin-top:4px;white-space:pre-wrap}
+  .meta{font-size:12px;color:var(--sub);margin-top:6px}
+  button.done{margin-top:10px;width:100%;padding:11px;border:0;border-radius:10px;
+              background:var(--navy);color:#fff;font-size:14px;font-weight:700}
+  label{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:12px 0 4px}
+  input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);
+    border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
+  textarea{min-height:74px;resize:vertical}
+  .seg{display:flex;gap:6px;margin-bottom:4px}
+  .seg button{flex:1;padding:10px 0;border:1px solid var(--line);background:#fff;
+    border-radius:10px;font-size:13px;font-weight:700;color:var(--sub)}
+  .seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .submit{margin:18px 0 8px;width:100%;padding:14px;border:0;border-radius:12px;
+    background:var(--red);color:#fff;font-size:16px;font-weight:700}
+  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;
+      border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
+  nav button{flex:1;border:0;background:none;padding:9px 0 11px;font-size:11px;
+             color:var(--sub);font-weight:700}
+  nav button.on{color:var(--navy)} nav button i{display:block;font-size:19px;font-style:normal}
+  .empty{text-align:center;color:var(--sub);padding:44px 0;font-size:14px}
+  .toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:#1b2333;
+    color:#fff;padding:11px 18px;border-radius:99px;font-size:13px;opacity:0;
+    transition:.25s;pointer-events:none;z-index:99}
+  .toast.on{opacity:1}
+  .hide{display:none}
+  #lock{position:fixed;inset:0;z-index:999;background:var(--navy);color:#fff;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  #lock h1{font-size:19px;margin:0 0 6px;letter-spacing:.04em}
+  #lock p{font-size:13px;opacity:.7;margin:0 0 22px}
+  #lock input{width:210px;text-align:center;font-size:26px;letter-spacing:.4em;
+              padding:13px;border:0;border-radius:12px;color:var(--ink)}
+  #lock button{margin-top:14px;width:210px;padding:13px;border:0;border-radius:12px;
+               background:#fff;color:var(--navy);font-size:16px;font-weight:700}
+  #lock .ng{margin-top:14px;font-size:13px;color:#ffb3ba;height:18px}
+  .stale{opacity:.45;transition:.2s}
+  .err{background:var(--redbg);border:1px solid var(--red);color:var(--red);
+       border-radius:12px;padding:14px;font-size:13px;line-height:1.7}
+  .err b{display:block;margin-bottom:6px;font-size:14px}
+  #gate{position:fixed;inset:0;z-index:200;background:var(--navy);color:#fff;
+        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px}
+  #gate h2{font-size:17px;margin:0 0 6px} #gate p{font-size:13px;opacity:.75;margin:0 0 20px}
+  #gate input{max-width:280px;text-align:center}
+  #gate button{max-width:280px;margin-top:12px;width:100%;padding:13px;border:0;
+               border-radius:12px;background:#fff;color:var(--navy);font-size:15px;font-weight:700}
+  #gate .ng{color:#ffb3ba;font-size:13px;margin-top:12px;min-height:18px}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;
+       padding:13px;margin-bottom:12px}
+  .box h2{font-size:13px;margin:0 0 10px;color:var(--sub)}
+  .mem{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+  .mem:first-child{border-top:0}
+  .mem .nm{font-size:13px;font-weight:700;width:78px;flex:none;overflow:hidden;
+           text-overflow:ellipsis;white-space:nowrap}
+  .mem .mb{flex:1;height:7px;background:#eef1f6;border-radius:99px;overflow:hidden}
+  .mem .mb i{display:block;height:100%;background:var(--red)}
+  .mem .mb i.ok{background:var(--grn)}
+  .mem .v{font-size:12px;font-weight:700;width:58px;text-align:right;flex:none}
+  .mem .v s{text-decoration:none;color:var(--sub);font-weight:400}
 </style>
 </head>
 <body>
 
-<!-- ▼ ウェブアプリを更新してURLが変わった場合は、この src だけ差し替えてください -->
-<iframe
-  src="https://script.google.com/macros/s/AKfycbxGTZZvm4Aax-ynJCqpvgmGnj_2os4X-4RNQ7p8osTgwpaHvivGejq5aXkFRsLAHS_g/exec"
-  title="ASXEED KPI"
-  allow="clipboard-write"></iframe>
+<div id="lock" class="hide">
+  <h1>ASXEED KPI</h1>
+  <p>暗証番号を入力してください</p>
+  <input id="pin" type="tel" inputmode="numeric" maxlength="8" autocomplete="off">
+  <button onclick="tryPin()">開く</button>
+  <div class="ng" id="pin-ng"></div>
+</div>
 
+<header>
+  <h1>ASXEED KPI</h1>
+  <select id="who" onchange="onWho()"></select>
+  <button class="rel" onclick="load(true)" title="最新に更新">↻</button>
+</header>
+
+<!-- ▼ やること -->
+<section id="v-todo" class="wrap">
+  <div class="kpi">
+    <div class="r"><span>期限超過</span><b id="c-red">–</b></div>
+    <div class="y"><span>期限間近</span><b id="c-yel">–</b></div>
+  </div>
+  <div id="list"><div class="empty">読み込み中…</div></div>
+</section>
+
+<!-- ▼ 入力 -->
+<section id="v-add" class="wrap hide">
+  <div class="seg">
+    <button data-t="行動" class="on" onclick="setType('行動')">行動</button>
+    <button data-t="研修" onclick="setType('研修')">研修</button>
+    <button data-t="クレーム" onclick="setType('クレーム')">クレーム</button>
+  </div>
+  <div id="form"></div>
+  <button class="submit" onclick="send()">この内容で登録する</button>
+</section>
+
+<!-- ▼ 数字 -->
+<section id="v-num" class="wrap hide">
+  <div class="goal" id="perf-box">
+    <h2 id="perf-h">売上・粗利の進捗</h2>
+    <div id="perf"><div class="meta">読み込み中…</div></div>
+  </div>
+  <div class="goal">
+    <h2 id="goal-h">記入目標（最低ライン＝3点）</h2>
+    <div id="goals"></div>
+  </div>
+  <div id="team-box" class="box hide">
+    <h2 id="team-h">チーム進捗（今週）</h2>
+    <div id="team-list"></div>
+  </div>
+  <div class="box">
+    <h2>未完了タスクの内訳（赤＋黄。記入件数ではありません）</h2>
+    <div class="kpi" style="margin:0">
+      <div class="r"><span>赤（期限超過）</span><b id="n-red">–</b></div>
+      <div class="y"><span>黄（期限間近）</span><b id="n-yel">–</b></div>
+      <div><span>うち 行動ログ</span><b id="n-a">–</b></div>
+      <div><span>うち 研修ログ</span><b id="n-k">–</b></div>
+      <div><span>うち クレーム</span><b id="n-c">–</b></div>
+      <div><span>未完了 合計</span><b id="n-t">–</b></div>
+    </div>
+  </div>
+</section>
+
+<div id="gate" class="hide">
+  <h2>ASXEED KPI</h2>
+  <p>合言葉を入力してください（初回のみ）</p>
+  <input type="password" id="gate-pw" autocomplete="off" placeholder="合言葉">
+  <button onclick="tryLogin()">開く</button>
+  <div class="ng" id="gate-ng"></div>
+</div>
+
+<nav>
+  <button id="t-todo" class="on" onclick="tab('todo')"><i>🔴</i>やること</button>
+  <button id="t-add" onclick="tab('add')"><i>✏️</i>入力</button>
+  <button id="t-num" onclick="tab('num')"><i>📊</i>数字</button>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+ *  GitHub Pages 版：Apps Script をJSON APIとして呼び出す
+ *  ▼ ウェブアプリURLを更新した場合はここだけ差し替えてください
+ * ================================================================ */
+const API = 'https://script.google.com/macros/s/AKfycbxGTZZvm4Aax-ynJCqpvgmGnj_2os4X-4RNQ7p8osTgwpaHvivGejq5aXkFRsLAHS_g/exec';
+let TOKEN = localStorage.getItem('kpiToken') || '';
+
+function apiCall(action, payload){
+  const u = API + '?action=' + encodeURIComponent(action)
+          + '&token=' + encodeURIComponent(TOKEN)
+          + '&payload=' + encodeURIComponent(JSON.stringify(payload || {}));
+  return fetch(u).then(r => r.json()).then(j => {
+    if(j && j.auth === false){ askLogin('合言葉が違います'); throw new Error('合言葉が違います'); }
+    if(j && j.error) throw new Error(j.error);
+    return j.data;
+  });
+}
+
+/* google.script.run と同じ書き味で使えるようにする薄い層 */
+const google = { script: { run: (function(){
+  let ok = null, ng = null;
+  const M = {
+    boot:          () => ['boot', {}],
+    getPerfTeams:  f => ['teams', { force: !!f }],
+    getPerfPerson: (n, f) => ['person', { name: n, force: !!f }],
+    markDone:      (t, r) => ['done', { type: t, row: r }],
+    addLog:        (t, o) => ['add', { type: t, obj: o }]
+  };
+  const self = {
+    withSuccessHandler(f){ ok = f; return self; },
+    withFailureHandler(f){ ng = f; return self; }
+  };
+  Object.keys(M).forEach(name => {
+    self[name] = function(){
+      const a = M[name].apply(null, arguments);
+      const s = ok, e = ng; ok = null; ng = null;
+      apiCall(a[0], a[1]).then(d => s && s(d)).catch(err => e ? e(err) : console.error(err));
+    };
+  });
+  return self;
+})() } };
+
+/* ---------- 合言葉 ---------- */
+function askLogin(msg){
+  document.getElementById('gate').classList.remove('hide');
+  document.getElementById('gate-ng').textContent = msg || '';
+  const el = document.getElementById('gate-pw');
+  el.value = ''; setTimeout(()=>el.focus(), 100);
+}
+function tryLogin(){
+  const v = document.getElementById('gate-pw').value.trim();
+  if(!v){ document.getElementById('gate-ng').textContent = '入力してください'; return; }
+  TOKEN = v;
+  document.getElementById('gate-ng').textContent = '確認中…';
+  apiCall('boot', {}).then(()=>{
+    localStorage.setItem('kpiToken', TOKEN);
+    document.getElementById('gate').classList.add('hide');
+    init();
+  }).catch(()=>{});
+}
+document.addEventListener('keydown', ev=>{
+  if(ev.key === 'Enter' && !document.getElementById('gate').classList.contains('hide')) tryLogin();
+});
+
+/* ---------- 入力フォーム定義（キーは コード.gs の CFG.col と対応） ---------- */
+const FORMS = {
+  '行動': [
+    ['date','日付','date'], ['owner','担当者','sel:社員名'],
+    ['client','クライアント','sel:クライアント'],
+    ['cat','行動カテゴリ','sel:行動カテゴリ'], ['task','行動タスク','sel:行動タスク'],
+    ['means','連絡手段','sel:連絡手段'], ['content','内容','area'],
+    ['next','次アクション','area'], ['due','期限','date'],
+    ['pri','重要度','sel:重要度'], ['status','状態','sel:状態']
+  ],
+  '研修': [
+    ['date','実施日','date'], ['owner','研修担当者','sel:社員名'],
+    ['target','研修対象者','text'], ['empType','雇用区分','sel:雇用区分'],
+    ['cat','研修カテゴリ','sel:研修カテゴリ'], ['method','研修方法','sel:研修方法'],
+    ['theme','研修テーマ','area'], ['level','到達度','sel:到達度'],
+    ['next','宿題／次アクション','area'], ['due','次回予定日','date'],
+    ['status','状態','sel:状態']
+  ],
+  'クレーム': [
+    ['date','発生日','date'], ['owner','報告者','sel:社員名'],
+    ['client','クライアント','sel:クライアント'], ['kind','種別','sel:種別'],
+    ['cat','クレームカテゴリ','sel:クレームカテゴリ'], ['pri','重要度','sel:重要度'],
+    ['content','事象内容（事実）','area'], ['cause','原因','sel:原因'],
+    ['first','初動対応','area'], ['final','最終対応','area'],
+    ['prevent','再発防止策','area'], ['due','対応期限','date'],
+    ['status','状態','sel:状態'], ['share','共有可','sel:共有可']
+  ]
+};
+
+let D = null, TYPE = '行動';
+const $ = id => document.getElementById(id);
+const today = () => new Date().toISOString().slice(0,10);
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('on');
+  setTimeout(()=>t.classList.remove('on'),2200); }
+
+function showErr(e){
+  const msg = (e && e.message) ? e.message : String(e);
+  $('list').innerHTML = '<div class="err"><b>エラーが発生しました</b>'
+    + esc(msg).replace(/\n/g,'<br>') + '</div>';
+  document.body.classList.remove('stale');
+}
+
+/* ---------- 暗証番号 ---------- */
+let PIN = localStorage.getItem('kpiPin') || '';
+
+function showLock(msg){
+  $('lock').classList.remove('hide');
+  $('pin-ng').textContent = msg || '';
+  $('pin').value = '';
+  setTimeout(()=>$('pin').focus(), 120);
+}
+function hideLock(){ $('lock').classList.add('hide'); }
+
+function tryPin(){
+  const v = $('pin').value.trim();
+  if(!v){ $('pin-ng').textContent = '入力してください'; return; }
+  $('pin-ng').textContent = '確認中…';
+  google.script.run
+    .withSuccessHandler(okFlag=>{
+      if(okFlag){
+        PIN = v; localStorage.setItem('kpiPin', v);
+        hideLock(); start();
+      } else {
+        $('pin-ng').textContent = '番号が違います';
+        $('pin').value = '';
+      }
+    })
+    .withFailureHandler(e=>{ $('pin-ng').textContent = (e&&e.message)||'通信エラー'; })
+    .auth(v);
+}
+document.addEventListener('keydown', e=>{
+  if(e.key === 'Enter' && !$('lock').classList.contains('hide')) tryPin();
+});
+
+/** 認証エラーならロック画面に戻す。戻したら true */
+function relock(e){
+  const m = (e && e.message) ? e.message : String(e);
+  if(m.indexOf('PIN_NG') >= 0){
+    PIN = ''; localStorage.removeItem('kpiPin');
+    showLock('番号が変更されています。入力し直してください');
+    return true;
+  }
+  return false;
+}
+
+/* ---------- 起動：キャッシュを即描画 → 裏で最新取得 ---------- */
+function start(){
+  try{
+    const c = localStorage.getItem('kpiCache');
+    if(c){ D = JSON.parse(c); document.body.classList.add('stale'); paint(); }
+  }catch(e){}
+  load(false);
+}
+
+(function init(){
+  if(PIN) start(); else showLock('');
+})();
+
+function load(manual){
+  if(manual) toast('更新中…');
+  document.body.classList.add('stale');
+  google.script.run
+    .withSuccessHandler(d=>{
+      D = d;
+      try{ localStorage.setItem('kpiCache', JSON.stringify(d)); }catch(e){}
+      document.body.classList.remove('stale');
+      paint();
+      if(manual) toast('最新にしました');
+      loadPerf(!!manual);
+    })
+    .withFailureHandler(e=>{ if(!relock(e)) showErr(e); })
+    .boot(PIN);
+}
+
+/* ---------- 売上・利益（別ファイル群。必要な分だけ取りに行く） ---------- */
+let P = { teams:null, people:{}, month:'' };
+try{ const c = localStorage.getItem('perfCache4'); if(c) P = JSON.parse(c); }catch(e){}
+
+function savePerf(){ try{ localStorage.setItem('perfCache4', JSON.stringify(P)); }catch(e){} }
+
+/** チーム分（軽い）。起動時に1回だけ */
+function loadTeams(force){
+  google.script.run
+    .withSuccessHandler(r=>{
+      P.teams = r.teams || {}; P.month = r.month; P.tErr = r.error || '';
+      savePerf(); fillWho(); renderPerf();
+    })
+    .withFailureHandler(e=>{ if(relock(e)) return; P.tErr = (e&&e.message)||String(e); renderPerf(); })
+    .getPerfTeams(!!force, PIN);
+}
+
+/** 個人分。キャッシュがあれば即表示し、必ず裏で最新を取り直す */
+function loadPerson(name, force){
+  if(!name) return;
+  const cached = P.people[name];
+  if(!cached || cached.loading || cached.error) P.people[name] = { loading:true };
+  renderPerf();
+  google.script.run
+    .withSuccessHandler(r=>{
+      P.people[name] = r || { error:'データなし' };
+      savePerf(); renderPerf();
+    })
+    .withFailureHandler(e=>{
+      if(relock(e)) return;
+      P.people[name] = { error:(e&&e.message)||String(e) };
+      renderPerf();
+    })
+    .getPerfPerson(name, !!force, PIN);
+}
+
+function loadPerf(force){
+  if(force) P.people = {};
+  loadTeams(force);
+  const w = mine();
+  if(w !== '全員' && w.indexOf('team:') !== 0) loadPerson(w, force);
+}
+
+const man = v => (Math.round(v/1000)/10).toLocaleString() + '万';
+
+/** 選択スコープの売上・利益データ */
+function perfOf(){
+  const w = mine();
+
+  if(w === '全員'){
+    const T = P.teams;
+    if(!T) return null;
+    const ks = Object.keys(T);
+    if(!ks.length) return null;
+    const pick = (t, names) => ((T[t]&&T[t].rows)||[]).filter(x=>names.indexOf(x.k)>=0)[0] || {g:0,a:0};
+    const sales  = ks.reduce((o,t)=>{ const x=pick(t,['売上']);              o.g+=x.g; o.a+=x.a; return o; },{g:0,a:0});
+    const profit = ks.reduce((o,t)=>{ const x=pick(t,['営利','営業利益']);   o.g+=x.g; o.a+=x.a; return o; },{g:0,a:0});
+    return { note:'イベント＋常勤', rows:[
+      { k:'売上', g:sales.g, a:sales.a },
+      { k:'営業利益', g:profit.g, a:profit.a }
+    ]};
+  }
+
+  if(w.indexOf('team:') === 0){
+    if(!P.teams) return null;
+    const t = w.slice(5);
+    const key = Object.keys(P.teams).filter(k => t.indexOf(k) >= 0)[0];
+    return key ? P.teams[key] : null;
+  }
+
+  return P.people[w] || null;
+}
+
+function renderPerf(){
+  const el = $('perf');
+  const group = isGroup();
+  const x = perfOf();
+  $('perf-h').textContent = (group ? 'チーム進捗' : '個人コミット進捗') + '　' + scopeLabel()
+    + ((x && x.note) ? '（' + x.note + '）' : '');
+
+  if(x && x.loading){ el.innerHTML = '<div class="meta">読み込み中…</div>'; return; }
+  if(x && x.error){   el.innerHTML = '<div class="meta">'+esc(x.error)+'</div>'; return; }
+  if(group && !x){
+    el.innerHTML = P.tErr
+      ? '<div class="meta" style="color:var(--red);white-space:pre-wrap">⚠ '+esc(P.tErr)+'</div>'
+      : '<div class="meta">読み込み中…</div>';
+    return;
+  }
+  if(!x){ el.innerHTML = '<div class="meta">この対象のデータが見つかりませんでした。</div>'; return; }
+
+  let warn = x.stale ? '<div class="meta" style="color:var(--red)">⚠ 集計シートの対象月が今月ではありません</div>' : '';
+  if(x.warn) warn += '<div class="meta" style="color:var(--red)">⚠ '+esc(x.warn)+'</div>';
+  el.innerHTML = x.rows.map(r => bar(r.k, r.a, r.g, man)).join('') + warn;
+}
+
+/* ---------- 描画（すべてローカル計算＝通信ゼロ） ---------- */
+function paint(){
+  fillWho();
+  buildForm();
+  renderTodo();
+  renderNum();
+  renderPerf();
+}
+
+/** 担当者プルダウンを組み立て直す（目標マスタのチーム＋実データ側のチームを統合） */
+function fillWho(){
+  if(!D) return;
+  const sel = $('who');
+  const cur = sel.value || localStorage.getItem('who') || '全員';
+
+  const teams = (D.teams || []).slice();
+  Object.keys((P && P.teams) || {}).forEach(k=>{
+    if(!teams.some(t => t.indexOf(k) >= 0 || k.indexOf(t) >= 0)) teams.push(k);
+  });
+
+  let h = '<option value="全員">全員（会社全体）</option>';
+  if(teams.length){
+    h += '<optgroup label="チーム">' +
+      teams.map(t=>`<option value="team:${esc(t)}">${esc(t)}</option>`).join('') + '</optgroup>';
+  }
+  h += '<optgroup label="個人">' +
+    D.masters.社員名.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('') + '</optgroup>';
+
+  if(h === sel.innerHTML) return;
+  sel.innerHTML = h;
+  sel.value = cur;
+  if(sel.selectedIndex < 0) sel.value = '全員';
+}
+
+function onWho(){
+  const w = $('who').value;
+  localStorage.setItem('who', w);
+  renderTodo(); renderNum(); buildForm();
+  if(w !== '全員' && w.indexOf('team:') !== 0) loadPerson(w, false); else renderPerf();
+}
+
+function mine(){ return $('who').value || '全員'; }
+
+/** 選択中のスコープに含まれる社員名（全員=null＝絞り込みなし） */
+function members(){
+  const w = mine();
+  if(w === '全員') return null;
+  if(w.indexOf('team:') === 0){
+    const t = w.slice(5);
+    return Object.keys(D.goals||{}).filter(n => {
+      const g = (D.goals[n].team || '').trim();
+      return !!g && (g === t || g.indexOf(t) >= 0 || t.indexOf(g) >= 0);
+    });
+  }
+  return [w];
+}
+function scopeLabel(){
+  const w = mine();
+  return w === '全員' ? '全員合計' : (w.indexOf('team:')===0 ? w.slice(5) : w);
+}
+function isGroup(){ const w = mine(); return w==='全員' || w.indexOf('team:')===0; }
+
+function todoOf(){
+  const m = members();
+  return m ? D.todo.filter(r => m.indexOf(r.owner) >= 0) : D.todo;
+}
+
+/** スコープの目標値を合計（未登録者は初期値で補完） */
+function goalOf(){
+  const g = D.goals || {}, t = D.target;
+  const names = members() || Object.keys(g);
+  const sum = { aw:0, am:0, kw:0, km:0 };
+  names.forEach(n => {
+    const x = g[n] || { aw:t['行動'].week, am:t['行動'].month, kw:t['研修'].week, km:t['研修'].month };
+    sum.aw += x.aw; sum.am += x.am; sum.kw += x.kw; sum.km += x.km;
+  });
+  return sum;
+}
+
+function renderTodo(){
+  if(!D) return;
+  const rows = todoOf();
+  $('c-red').textContent = rows.filter(r=>r.judge==='赤').length;
+  $('c-yel').textContent = rows.filter(r=>r.judge==='黄').length;
+  if(!rows.length){ $('list').innerHTML='<div class="empty">対応が必要な案件はありません 🎉</div>'; return; }
+  $('list').innerHTML = rows.map(r=>{
+    const c = r.judge==='赤' ? 'r' : 'y';
+    return `<div class="card ${c}">
+      <div class="top">
+        <span class="tag ${c}">${r.judge==='赤'?'期限超過':'期限間近'}</span>
+        <span class="tag g">${r.type}</span>
+        <span class="due">期限 ${r.due||'—'}</span>
+      </div>
+      <div class="ttl">${esc(r.client||'')}${r.title?' / '+esc(r.title):''}</div>
+      ${r.body?`<div class="bd">${esc(r.body)}</div>`:''}
+      <div class="meta">担当：${esc(r.owner||'—')}${r.pri?'　重要度：'+esc(r.pri):''}</div>
+      <button class="done" onclick="done('${r.type}',${r.row},this)">✓ 完了にする</button>
+    </div>`;
+  }).join('');
+}
+
+/* 期間内の実績を数える（行動＝件数 / 研修＝対象者のユニーク数） */
+function count(kind, from, to, who){
+  const m = who ? [who] : members();
+  const rows = D.entries[kind].filter(e =>
+    e[0]>=from && e[0]<=to && (!m || m.indexOf(e[1])>=0));
+  if(kind==='研修'){
+    const s = {}; rows.forEach(e=>{ if(e[2]) s[e[2]]=1; });
+    return Object.keys(s).length;
+  }
+  return rows.length;
+}
+
+function bar(label, now, goal, fmt){
+  const f = fmt || (v => v);
+  const pct = goal ? Math.max(0, Math.min(100, Math.round(now/goal*100))) : 0;
+  const ok = goal > 0 && now >= goal;
+  const rest = goal - now;
+  return `<div class="g">
+    <div class="grow"><em>${label}</em>
+      <span class="badge ${ok?'ok':'ng'}">${ok?'達成':'あと'+f(rest>0?rest:0)}</span>
+      <span class="n">${f(now)}<s> / ${f(goal)}　${pct}%</s></span></div>
+    <div class="bar"><i class="${ok?'ok':''}" style="width:${pct}%"></i></div>
+  </div>`;
+}
+
+function renderNum(){
+  if(!D) return;
+  const p = D.period, g = goalOf();
+  $('goal-h').textContent = '記入目標　' + scopeLabel();
+  $('goals').innerHTML =
+      bar('行動ログ 今週（件）', count('行動', p.ws, p.we), g.aw)
+    + bar('行動ログ 今月（件）', count('行動', p.ms, p.me), g.am)
+    + bar('研修ログ 今週（人）', count('研修', p.ws, p.we), g.kw)
+    + bar('研修ログ 今月（人）', count('研修', p.ms, p.me), g.km);
+
+  // チーム/全員のときはメンバー別の今週進捗を出す
+  const box = $('team-box');
+  if(isGroup()){
+    const names = members() || Object.keys(D.goals||{});
+    const t = D.target;
+    $('team-h').textContent = 'メンバー別 今週の進捗（' + scopeLabel() + '）';
+    $('team-list').innerHTML = names.map(n=>{
+      const x = (D.goals||{})[n] || { aw:t['行動'].week, kw:t['研修'].week };
+      const a = count('行動', p.ws, p.we, n), k = count('研修', p.ws, p.we, n);
+      const row = (v, goal) => {
+        const pct = goal ? Math.min(100, Math.round(v/goal*100)) : 0;
+        return `<div class="mb"><i class="${v>=goal?'ok':''}" style="width:${pct}%"></i></div>
+                <div class="v">${v}<s>/${goal}</s></div>`;
+      };
+      return `<div class="mem"><div class="nm">${esc(n)}</div>${row(a, x.aw)}${row(k, x.kw)}</div>`;
+    }).join('') + '<div class="meta" style="margin-top:8px">左＝行動（件）／右＝研修（人）</div>';
+    box.classList.remove('hide');
+  } else {
+    box.classList.add('hide');
+  }
+
+  const rows = todoOf();
+  const n = k => rows.filter(r=>r.type===k).length;
+  $('n-red').textContent = rows.filter(r=>r.judge==='赤').length;
+  $('n-yel').textContent = rows.filter(r=>r.judge==='黄').length;
+  $('n-a').textContent = n('行動');
+  $('n-k').textContent = n('研修');
+  $('n-c').textContent = n('クレーム');
+  $('n-t').textContent = rows.length;
+}
+
+/* ---------- タブ切替（通信なし） ---------- */
+function tab(v){
+  ['todo','add','num'].forEach(k=>{
+    $('v-'+k).classList.toggle('hide', k!==v);
+    $('t-'+k).classList.toggle('on', k===v);
+  });
+  scrollTo(0,0);
+}
+
+/* ---------- 完了 ---------- */
+function done(type,row,btn){
+  btn.disabled = true; btn.textContent = '処理中…';
+  google.script.run
+    .withSuccessHandler(()=>{
+      D.todo = D.todo.filter(r=>!(r.type===type && r.row===row));  // 画面は即反映
+      renderTodo(); renderNum(); toast('完了にしました');
+    })
+    .withFailureHandler(e=>{ btn.disabled=false; btn.textContent='✓ 完了にする';
+      if(!relock(e)) showErr(e); })
+    .markDone(type,row,PIN);
+}
+
+/* ---------- 入力 ---------- */
+function setType(t){
+  TYPE = t;
+  document.querySelectorAll('.seg button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  buildForm();
+}
+
+function buildForm(){
+  if(!D) return;
+  const who = isGroup() ? '' : mine();
+  $('form').innerHTML = FORMS[TYPE].map(([k,label,kind])=>{
+    let f;
+    if(kind==='date') f = `<input type="date" id="f-${k}" value="${k==='date'?today():''}">`;
+    else if(kind==='area') f = `<textarea id="f-${k}"></textarea>`;
+    else if(kind==='text') f = `<input type="text" id="f-${k}">`;
+    else {
+      const list = D.masters[kind.split(':')[1]] || [];
+      const def = (k==='owner' && who) ? who : (k==='status' ? '対応中' : '');
+      f = `<select id="f-${k}"><option value=""></option>` +
+          list.map(v=>`<option${v===def?' selected':''}>${esc(v)}</option>`).join('') + `</select>`;
+    }
+    return `<label for="f-${k}">${label}</label>${f}`;
+  }).join('');
+}
+
+function send(){
+  const obj = {};
+  FORMS[TYPE].forEach(([k])=>{ const el=$('f-'+k); if(el && el.value) obj[k]=el.value; });
+  if(!obj.date || !obj.owner){ toast('日付と担当者は必須です'); return; }
+  const btn = document.querySelector('.submit');
+  btn.disabled = true; btn.textContent = '登録中…';
+  google.script.run
+    .withSuccessHandler(msg=>{
+      btn.disabled=false; btn.textContent='この内容で登録する';
+      // 画面の目標カウントを先に加算（体感を速く）
+      if(TYPE==='行動') D.entries['行動'].push([obj.date, obj.owner]);
+      if(TYPE==='研修') D.entries['研修'].push([obj.date, obj.owner, obj.target||'']);
+      renderNum(); buildForm(); toast(msg); tab('num');
+    })
+    .withFailureHandler(e=>{ btn.disabled=false; btn.textContent='この内容で登録する';
+      if(!relock(e)) showErr(e); })
+    .addLog(TYPE, obj, PIN);
+}
+</script>
 </body>
 </html>
