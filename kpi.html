@@ -4,96 +4,115 @@
 <meta charset="utf-8">
 <style>
   :root{
-    --bg:#f4f6fa; --card:#fff; --line:#e2e6ee; --ink:#1b2333; --sub:#68738a;
-    --navy:#1f2a44; --red:#c1121f; --redbg:#fdeaec; --yel:#b06f00; --yelbg:#fff6e0;
-    --grn:#146c43; --grnbg:#e3f3e9;
+    --bg:#f2f4f8; --card:#fff; --line:#e2e6ee; --ink:#141b2b; --sub:#5f6b82;
+    --navy:#1f2a44; --red:#c1121f; --redbg:#fdeaec; --yel:#a86500; --yelbg:#fff4d9;
+    --grn:#146c43; --grnbg:#e3f3e9; --max:600px;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  body{margin:0;padding:0 0 76px;background:var(--bg);color:var(--ink);
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;padding:0 0 calc(84px + env(safe-area-inset-bottom));
+       background:var(--bg);color:var(--ink);
        font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
-       font-size:15px;line-height:1.55}
-  header{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;
-         padding:9px 12px;display:flex;gap:8px;align-items:center}
-  header h1{font-size:14px;margin:0;font-weight:700;white-space:nowrap}
-  header select{margin-left:auto;background:#33405f;color:#fff;border:0;
-                border-radius:8px;padding:7px 9px;font-size:14px;max-width:44%}
-  header .rel{background:#33405f;border:0;color:#fff;border-radius:8px;
-              padding:7px 10px;font-size:15px;line-height:1}
-  .wrap{padding:12px}
-  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:14px;
-           padding:12px;text-align:center}
-  .kpi b{display:block;font-size:29px;line-height:1.1;margin-top:2px}
-  .kpi .r b{color:var(--red)} .kpi .y b{color:var(--yel)}
-  .kpi span{font-size:12px;color:var(--sub)}
+       font-size:16px;line-height:1.65}
 
-  .goal{background:var(--card);border:1px solid var(--line);border-radius:14px;
-        padding:13px;margin-bottom:12px}
-  .goal h2{font-size:13px;margin:0 0 10px;color:var(--sub)}
-  .g{margin-bottom:12px} .g:last-child{margin-bottom:0}
-  .grow{display:flex;align-items:baseline;font-size:13px;margin-bottom:5px}
-  .grow em{font-style:normal;font-weight:700}
-  .grow .n{margin-left:auto;font-weight:700;font-size:15px}
-  .grow .n s{text-decoration:none;color:var(--sub);font-weight:400;font-size:12px}
-  .bar{height:8px;background:#eef1f6;border-radius:99px;overflow:hidden}
+  /* ---------- ヘッダー（2段組。プルダウンは全幅） ---------- */
+  header{position:sticky;top:0;z-index:10;background:var(--navy);color:#fff;
+         padding:12px 14px calc(12px + env(safe-area-inset-top,0)) 14px;
+         padding-top:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  header h1{font-size:16px;margin:0;font-weight:700;flex:1 1 auto}
+  header .rel{width:46px;height:46px;flex:none;background:#33405f;border:0;color:#fff;
+              border-radius:12px;font-size:22px;line-height:1}
+  header select{flex:1 1 100%;order:3;background:#33405f;color:#fff;border:0;
+                border-radius:12px;padding:14px 12px;font-size:17px;font-weight:700;
+                max-width:none;appearance:none;
+                background-image:linear-gradient(45deg,transparent 50%,#fff 50%),
+                                 linear-gradient(135deg,#fff 50%,transparent 50%);
+                background-position:calc(100% - 20px) 24px, calc(100% - 14px) 24px;
+                background-size:6px 6px,6px 6px;background-repeat:no-repeat}
+
+  .wrap{padding:14px;max-width:var(--max);margin:0 auto}
+
+  /* ---------- 数字カード ---------- */
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .kpi div{background:var(--card);border:1px solid var(--line);border-radius:16px;
+           padding:16px 10px;text-align:center}
+  .kpi b{display:block;font-size:34px;line-height:1.15;margin-top:4px;font-weight:800}
+  .kpi .r b{color:var(--red)} .kpi .y b{color:var(--yel)}
+  .kpi span{font-size:13px;color:var(--sub);font-weight:600}
+
+  /* ---------- 目標バー ---------- */
+  .goal,.box{background:var(--card);border:1px solid var(--line);border-radius:16px;
+             padding:16px 14px;margin-bottom:14px}
+  .goal h2,.box h2{font-size:14px;margin:0 0 14px;color:var(--sub);font-weight:700;line-height:1.5}
+  .g{margin-bottom:18px} .g:last-child{margin-bottom:0}
+  .grow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+  .grow em{font-style:normal;font-weight:700;font-size:16px;flex:1 1 100%}
+  .grow .n{margin-left:auto;font-weight:800;font-size:20px}
+  .grow .n s{text-decoration:none;color:var(--sub);font-weight:600;font-size:14px}
+  .bar{height:12px;background:#e8ecf3;border-radius:99px;overflow:hidden}
   .bar i{display:block;height:100%;border-radius:99px;background:var(--red);transition:width .4s}
   .bar i.ok{background:var(--grn)}
-  .badge{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:7px}
+  .badge{font-size:13px;font-weight:700;padding:4px 12px;border-radius:99px}
   .badge.ok{background:var(--grnbg);color:var(--grn)}
   .badge.ng{background:var(--redbg);color:var(--red)}
 
-  .card{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--line);
-        border-radius:12px;padding:12px;margin-bottom:10px}
-  .card.r{border-left-color:var(--red)} .card.y{border-left-color:var(--yel)}
-  .top{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px}
-  .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
-  .tag.r{background:var(--redbg);color:var(--red)} .tag.y{background:var(--yelbg);color:var(--yel)}
-  .tag.g{background:#eef2f7;color:var(--sub)}
-  .due{margin-left:auto;font-size:12px;color:var(--sub);font-weight:700}
-  .ttl{font-weight:700;font-size:14px}
-  .bd{font-size:13px;color:var(--sub);margin-top:4px;white-space:pre-wrap}
-  .meta{font-size:12px;color:var(--sub);margin-top:6px}
-  button.done{margin-top:10px;width:100%;padding:11px;border:0;border-radius:10px;
-              background:var(--navy);color:#fff;font-size:14px;font-weight:700}
-  label{display:block;font-size:12px;font-weight:700;color:var(--sub);margin:12px 0 4px}
-  input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);
-    border-radius:10px;font-size:16px;background:#fff;font-family:inherit}
-  textarea{min-height:74px;resize:vertical}
-  .seg{display:flex;gap:6px;margin-bottom:4px}
-  .seg button{flex:1;padding:10px 0;border:1px solid var(--line);background:#fff;
-    border-radius:10px;font-size:13px;font-weight:700;color:var(--sub)}
-  .seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
-  .submit{margin:18px 0 8px;width:100%;padding:14px;border:0;border-radius:12px;
-    background:var(--red);color:#fff;font-size:16px;font-weight:700}
-  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;
-      border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-  nav button{flex:1;border:0;background:none;padding:9px 0 11px;font-size:11px;
-             color:var(--sub);font-weight:700}
-  nav button.on{color:var(--navy)} nav button i{display:block;font-size:19px;font-style:normal}
-  .empty{text-align:center;color:var(--sub);padding:44px 0;font-size:14px}
-  .toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%);background:#1b2333;
-    color:#fff;padding:11px 18px;border-radius:99px;font-size:13px;opacity:0;
-    transition:.25s;pointer-events:none;z-index:99}
-  .toast.on{opacity:1}
-  .hide{display:none}
-              padding:13px;border:0;border-radius:12px;color:var(--ink)}
-               background:#fff;color:var(--navy);font-size:16px;font-weight:700}
-  .stale{opacity:.45;transition:.2s}
-  .err{background:var(--redbg);border:1px solid var(--red);color:var(--red);
-       border-radius:12px;padding:14px;font-size:13px;line-height:1.7}
-  .err b{display:block;margin-bottom:6px;font-size:14px}
-  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;
-       padding:13px;margin-bottom:12px}
-  .box h2{font-size:13px;margin:0 0 10px;color:var(--sub)}
-  .mem{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
-  .mem:first-child{border-top:0}
-  .mem .nm{font-size:13px;font-weight:700;width:78px;flex:none;overflow:hidden;
-           text-overflow:ellipsis;white-space:nowrap}
-  .mem .mb{flex:1;height:7px;background:#eef1f6;border-radius:99px;overflow:hidden}
+  /* ---------- メンバー別（縦積み） ---------- */
+  .mem{display:grid;grid-template-columns:1fr 76px;gap:8px 12px;align-items:center;
+       padding:14px 0;border-top:1px solid var(--line)}
+  .mem:first-child{border-top:0;padding-top:0}
+  .mem .nm{grid-column:1 / -1;font-size:16px;font-weight:700}
+  .mem .mb{height:10px;background:#e8ecf3;border-radius:99px;overflow:hidden}
   .mem .mb i{display:block;height:100%;background:var(--red)}
   .mem .mb i.ok{background:var(--grn)}
-  .mem .v{font-size:12px;font-weight:700;width:58px;text-align:right;flex:none}
-  .mem .v s{text-decoration:none;color:var(--sub);font-weight:400}
+  .mem .v{font-size:14px;font-weight:700;text-align:right}
+  .mem .v s{text-decoration:none;color:var(--sub);font-weight:600}
+
+  /* ---------- やることカード ---------- */
+  .card{background:var(--card);border:1px solid var(--line);border-left:6px solid var(--line);
+        border-radius:14px;padding:16px 14px;margin-bottom:12px}
+  .card.r{border-left-color:var(--red)} .card.y{border-left-color:var(--yel)}
+  .top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .tag{font-size:12px;font-weight:700;padding:5px 12px;border-radius:99px}
+  .tag.r{background:var(--redbg);color:var(--red)} .tag.y{background:var(--yelbg);color:var(--yel)}
+  .tag.g{background:#eef2f7;color:var(--sub)}
+  .due{margin-left:auto;font-size:13px;color:var(--sub);font-weight:700}
+  .ttl{font-weight:700;font-size:17px;line-height:1.5}
+  .bd{font-size:15px;color:var(--sub);margin-top:6px;white-space:pre-wrap}
+  .meta{font-size:13px;color:var(--sub);margin-top:8px}
+  button.done{margin-top:14px;width:100%;min-height:52px;border:0;border-radius:12px;
+              background:var(--navy);color:#fff;font-size:16px;font-weight:700}
+
+  /* ---------- 入力フォーム ---------- */
+  label{display:block;font-size:14px;font-weight:700;color:var(--sub);margin:18px 0 6px}
+  input,select,textarea{width:100%;min-height:52px;padding:14px;border:1px solid var(--line);
+    border-radius:12px;font-size:17px;background:#fff;font-family:inherit;color:var(--ink)}
+  textarea{min-height:100px;resize:vertical;line-height:1.6}
+  .seg{display:flex;gap:8px;margin-bottom:6px}
+  .seg button{flex:1;min-height:52px;border:1px solid var(--line);background:#fff;
+    border-radius:12px;font-size:15px;font-weight:700;color:var(--sub)}
+  .seg button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .submit{margin:24px 0 8px;width:100%;min-height:58px;border:0;border-radius:14px;
+    background:var(--red);color:#fff;font-size:18px;font-weight:800}
+
+  /* ---------- 下部タブ ---------- */
+  nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#fff;
+      border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);
+      max-width:var(--max);margin:0 auto}
+  nav button{flex:1;border:0;background:none;padding:10px 0 12px;font-size:12px;
+             color:var(--sub);font-weight:700;min-height:62px}
+  nav button.on{color:var(--navy)}
+  nav button i{display:block;font-size:23px;font-style:normal;margin-bottom:3px}
+
+  .empty{text-align:center;color:var(--sub);padding:56px 16px;font-size:16px;line-height:1.8}
+  .toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#141b2b;
+    color:#fff;padding:14px 22px;border-radius:99px;font-size:15px;opacity:0;
+    transition:.25s;pointer-events:none;z-index:99;max-width:88%;text-align:center}
+  .toast.on{opacity:1}
+  .hide{display:none}
+  .stale{opacity:.45;transition:.2s}
+  .err{background:var(--redbg);border:1px solid var(--red);color:var(--red);
+       border-radius:14px;padding:16px;font-size:15px;line-height:1.8}
+  .err b{display:block;margin-bottom:8px;font-size:16px}
 </style>
 </head>
 <body>
@@ -139,8 +158,8 @@
     <div id="team-list"></div>
   </div>
   <div class="box">
-    <h2>未完了タスクの内訳（赤＋黄。記入件数ではありません）</h2>
-    <div class="kpi" style="margin:0">
+    <h2>未完了タスクの内訳<br><span style="font-weight:400">赤＋黄の件数です（記入件数ではありません）</span></h2>
+    <div class="kpi" style="margin:0;grid-template-columns:1fr 1fr">
       <div class="r"><span>赤（期限超過）</span><b id="n-red">–</b></div>
       <div class="y"><span>黄（期限間近）</span><b id="n-yel">–</b></div>
       <div><span>うち 行動ログ</span><b id="n-a">–</b></div>
@@ -515,7 +534,7 @@ function renderNum(){
                 <div class="v">${v}<s>/${goal}</s></div>`;
       };
       return `<div class="mem"><div class="nm">${esc(n)}</div>${row(a, x.aw)}${row(k, x.kw)}</div>`;
-    }).join('') + '<div class="meta" style="margin-top:8px">左＝行動（件）／右＝研修（人）</div>';
+    }).join('') + '<div class="meta" style="margin-top:12px">上段＝行動（件）／下段＝研修（人）</div>';
     box.classList.remove('hide');
   } else {
     box.classList.add('hide');
