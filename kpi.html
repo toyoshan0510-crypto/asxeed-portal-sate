@@ -509,16 +509,11 @@ function renderTodo(){
   }).join('');
 }
 
-/* 期間内の実績を数える（行動＝件数 / 研修＝対象者のユニーク数） */
+/* 期間内の実績を数える（行動・研修とも記入件数。同じ相手への複数回も1件ずつ数えます） */
 function count(kind, from, to, who){
   const m = who ? [who] : members();
-  const rows = D.entries[kind].filter(e =>
-    e[0]>=from && e[0]<=to && (!m || m.indexOf(e[1])>=0));
-  if(kind==='研修'){
-    const s = {}; rows.forEach(e=>{ if(e[2]) s[e[2]]=1; });
-    return Object.keys(s).length;
-  }
-  return rows.length;
+  return D.entries[kind].filter(e =>
+    e[0]>=from && e[0]<=to && (!m || m.indexOf(e[1])>=0)).length;
 }
 
 function bar(label, now, goal, fmt){
@@ -541,8 +536,8 @@ function renderNum(){
   $('goals').innerHTML =
       bar('行動ログ 今週（件）', count('行動', p.ws, p.we), g.aw)
     + bar('行動ログ 今月（件）', count('行動', p.ms, p.me), g.am)
-    + bar('研修ログ 今週（人）', count('研修', p.ws, p.we), g.kw)
-    + bar('研修ログ 今月（人）', count('研修', p.ms, p.me), g.km);
+    + bar('研修ログ 今週（件）', count('研修', p.ws, p.we), g.kw)
+    + bar('研修ログ 今月（件）', count('研修', p.ms, p.me), g.km);
 
   // チーム/全員のときはメンバー別の今週進捗を出す
   const box = $('team-box');
@@ -559,7 +554,7 @@ function renderNum(){
                 <div class="v">${v}<s>/${goal}</s></div>`;
       };
       return `<div class="mem"><div class="nm">${esc(n)}</div>${row(a, x.aw)}${row(k, x.kw)}</div>`;
-    }).join('') + '<div class="meta" style="margin-top:12px">上段＝行動（件）／下段＝研修（人）</div>';
+    }).join('') + '<div class="meta" style="margin-top:12px">上段＝行動（件）／下段＝研修（件）</div>';
     box.classList.remove('hide');
   } else {
     box.classList.add('hide');
